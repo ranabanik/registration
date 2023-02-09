@@ -10,9 +10,11 @@ from matplotlib.colors import LinearSegmentedColormap
 from skimage.transform import resize
 from skimage.util import compare_images
 import sys
-# sys.path.append('C:\\Users\\ranab\\PycharmProjects\\spinalcordinjury\\Codes')
+sys.path.append('C:\\Users\\ranab\\PycharmProjects\\Registration\\registraion')
 import random
+import registration_utilities as ru
 from PIL import Image
+
 random.seed(1001)
 
 # +-------------------------------------+
@@ -487,15 +489,17 @@ if __name__ != '__main__':
     # def command_iteration_(filter):
     #     global metric_values
         metric_values.append(filter.GetMetric())
-    #     print(f"{filter.GetElapsedIterations():3} = {filter.GetMetric():10.5f}")
-    #     plt.plot(metric_values, 'r')
+        # global metric_values
+        # print(f"{filter.GetElapsedIterations():3} = {filter.GetMetric():10.5f}")
+        # # plt.plot(metric_values, 'r')
+        # metric_values.append(filter.GetMetric())
     #     # plt.plot(multires_iterations, [metric_values[index] for index in multires_iterations], 'b*')
     #     plt.xlabel('Iteration Number', fontsize=12)
     #     plt.ylabel('Metric Value', fontsize=12)
     #     plt.show()
 
     metric_values = []
-
+    # demons = sitk.DemonsRegistrationFilter()
     demons = sitk.FastSymmetricForcesDemonsRegistrationFilter()
     demons.SetNumberOfIterations(5000)
     demons.SetStandardDeviations(1.2)
@@ -507,8 +511,7 @@ if __name__ != '__main__':
     transform_to_displacment_field_filter = sitk.TransformToDisplacementFieldFilter()
     transform_to_displacment_field_filter.SetReferenceImage(fixed_image)
     displacementTx = sitk.DisplacementFieldTransform(transform_to_displacment_field_filter.Execute
-                                                        (sitk.Transform(2, sitk.sitkIdentity))
-                                                        )
+                                                        (sitk.Transform(2, sitk.sitkIdentity)))
     displacementTx.SetSmoothingGaussianOnUpdate(varianceForUpdateField=0.0, varianceForTotalField=1.5)
     # registration_method.SetMovingInitialTransform(eulerTx)
     # registration_method.SetMetricAsANTSNeighborhoodCorrelation(4)
@@ -525,13 +528,13 @@ if __name__ != '__main__':
     resampler.SetTransform(outTx)
     out = resampler.Execute(moving_image)
     # registration_method.AddCommand(sitk.sitkIterationEvent, lambda: command_iteration(registration_method))
-    displayImage(sitk.GetArrayFromImage(out), Title_='registered image -> Euler+Displacement')
+    displayImage(sitk.GetArrayFromImage(out), Title_='Euler + FastSymmetricForcesDemonsRegistrationFilter')
     displayImage(sitk.GetArrayFromImage(moving_image), Title_='moving image')
     displayImage(sitk.GetArrayFromImage(fixed_image), Title_='fixed image')
     checkerImg = compare_images(sitk.GetArrayFromImage(out),
                                 sitk.GetArrayFromImage(fixed_image),
                                 method='diff')
-    displayImage(checkerImg, Title_='mask-label overlapped after demons')
+    displayImage(checkerImg, Title_='Euler + FastSymmetricForcesDemonsRegistrationFilter')
     # transform_to_displacment_field_filter = sitk.TransformToDisplacementFieldFilter()
     # transform_to_displacment_field_filter.SetReferenceImage(fixed_image)
     # initial_transform = sitk.DisplacementFieldTransform(
@@ -568,11 +571,339 @@ if __name__ != '__main__':
     plt.ylabel("Registration metric")
     plt.xlabel("Iterations")
     plt.show()
-    # +--------------------------+
-    # |   displacement method    |
-    # +--------------------------+
+
+
+# +------------------------------------------+
+# |  multiresolution demons + displacement   |
+# +------------------------------------------+
+if __name__ == '__main__':
+    shrink_factors = [2, 2, 1]
+    smoothing_sigmas = [4, 4, 0]
+    # if np.isscalar(shrink_factors):
+    #     shrink_factors = [shrink_factors] * moving_image.GetDimension()
+    # if np.isscalar(smoothing_sigmas):
+    #     smoothing_sigmas = [smoothing_sigmas] * moving_image.GetDimension()
+    #
+    # smoothed_image = sitk.SmoothingRecursiveGaussian(moving_image, smoothing_sigmas)
+    #
+    # original_spacing = moving_image.GetSpacing()
+    # original_size = moving_image.GetSize()
+    # new_size = [
+    #     int(sz / float(sf) + 0.5) for sf, sz in zip(shrink_factors, original_size)
+    # ]
+    # new_spacing = [
+    #     ((original_sz - 1) * original_spc) / (new_sz - 1)
+    #     for original_sz, original_spc, new_sz in zip(
+    #         original_size, original_spacing, new_size
+    #     )
+    # ]
+    # print("new size >> ", new_size)
+    # print("new spacing >>", new_spacing)
+    def smooth_and_resample(image, shrink_factors, smoothing_sigmas):
+        """
+        Args:
+            image: The image we want to resample.
+            shrink_factor(s): Number(s) greater than one, such that the new image's size is original_size/shrink_factor.
+            smoothing_sigma(s): Sigma(s) for Gaussian smoothing, this is in physical units, not pixels.
+        Return:
+            Image which is a result of smoothing the input and then resampling it using the given sigma(s) and shrink factor(s).
+        """
+        if np.isscalar(shrink_factors):
+            shrink_factors = [shrink_factors] * image.GetDimension()
+        if np.isscalar(smoothing_sigmas):
+            smoothing_sigmas = [smoothing_sigmas] * image.GetDimension()
+
+        smoothed_image = sitk.SmoothingRecursiveGaussian(image, smoothing_sigmas)
+
+        original_spacing = image.GetSpacing()
+        original_size = image.GetSize()
+        new_size = [
+            int(sz / float(sf) + 0.5) for sf, sz in zip(shrink_factors, original_size)
+        ]
+        new_spacing = [
+            ((original_sz - 1) * original_spc) / (new_sz - 1)
+            for original_sz, original_spc, new_sz in zip(
+                original_size, original_spacing, new_size
+            )
+        ]
+        return sitk.Resample(
+            smoothed_image,
+            new_size,
+            sitk.Transform(),
+            sitk.sitkNearestNeighbor,
+            image.GetOrigin(),
+            new_spacing,
+            image.GetDirection(),
+            0.0,
+            image.GetPixelID(),
+        )
+
+    out = smooth_and_resample(moving_image, shrink_factors=shrink_factors,
+                              smoothing_sigmas=smoothing_sigmas)
+    displayImage(sitk.GetArrayFromImage(out), Title_='smoothed image')
+
+
+    def multiscale_demons(
+            registration_algorithm,
+            fixed_image,
+            moving_image,
+            initial_transform=None,
+            shrink_factors=None,
+            smoothing_sigmas=None,
+    ):
+        """
+        Run the given registration algorithm in a multiscale fashion. The original scale should not be given as input as the
+        original images are implicitly incorporated as the base of the pyramid.
+        Args:
+            registration_algorithm: Any registration algorithm that has an Execute(fixed_image, moving_image, displacement_field_image)
+                                    method.
+            fixed_image: Resulting transformation maps points from this image's spatial domain to the moving image spatial domain.
+            moving_image: Resulting transformation maps points from the fixed_image's spatial domain to this image's spatial domain.
+            initial_transform: Any SimpleITK transform, used to initialize the displacement field.
+            shrink_factors (list of lists or scalars): Shrink factors relative to the original image's size. When the list entry,
+                                                       shrink_factors[i], is a scalar the same factor is applied to all axes.
+                                                       When the list entry is a list, shrink_factors[i][j] is applied to axis j.
+                                                       This allows us to specify different shrink factors per axis. This is useful
+                                                       in the context of microscopy images where it is not uncommon to have
+                                                       unbalanced sampling such as a 512x512x8 image. In this case we would only want to
+                                                       sample in the x,y axes and leave the z axis as is: [[[8,8,1],[4,4,1],[2,2,1]].
+            smoothing_sigmas (list of lists or scalars): Amount of smoothing which is done prior to resmapling the image using the given shrink factor. These
+                              are in physical (image spacing) units.
+        Returns:
+            SimpleITK.DisplacementFieldTransform
+        """
+
+        # Create image pyramid in a memory efficient manner using a generator function.
+        # The whole pyramid never exists in memory, each level is created when iterating over
+        # the generator.
+        def image_pair_generator(
+                fixed_image, moving_image, shrink_factors, smoothing_sigmas
+        ):
+            end_level = 0
+            start_level = 0
+            if shrink_factors is not None:
+                end_level = len(shrink_factors)
+            for level in range(start_level, end_level):
+                f_image = smooth_and_resample(
+                    fixed_image, shrink_factors[level], smoothing_sigmas[level]
+                )
+                m_image = smooth_and_resample(
+                    moving_image, shrink_factors[level], smoothing_sigmas[level]
+                )
+                yield (f_image, m_image)
+            yield (fixed_image, moving_image)
+
+        # Create initial displacement field at lowest resolution.
+        # Currently, the pixel type is required to be sitkVectorFloat64 because
+        # of a constraint imposed by the Demons filters.
+        if shrink_factors is not None:
+            original_size = fixed_image.GetSize()
+            original_spacing = fixed_image.GetSpacing()
+            s_factors = (
+                [shrink_factors[0]] * len(original_size)
+                if np.isscalar(shrink_factors[0])
+                else shrink_factors[0]
+            )
+            df_size = [
+                int(sz / float(sf) + 0.5) for sf, sz in zip(s_factors, original_size)
+            ]
+            df_spacing = [
+                ((original_sz - 1) * original_spc) / (new_sz - 1)
+                for original_sz, original_spc, new_sz in zip(
+                    original_size, original_spacing, df_size
+                )
+            ]
+        else:
+            df_size = fixed_image.GetSize()
+            df_spacing = fixed_image.GetSpacing()
+
+        if initial_transform:
+            initial_displacement_field = sitk.TransformToDisplacementField(
+                initial_transform,
+                sitk.sitkVectorFloat64,
+                df_size,
+                fixed_image.GetOrigin(),
+                df_spacing,
+                fixed_image.GetDirection(),
+            )
+        else:
+            initial_displacement_field = sitk.Image(
+                df_size, sitk.sitkVectorFloat64, fixed_image.GetDimension()
+            )
+            initial_displacement_field.SetSpacing(df_spacing)
+            initial_displacement_field.SetOrigin(fixed_image.GetOrigin())
+
+        # Run the registration.
+        # Start at the top of the pyramid and work our way down.
+        for f_image, m_image in image_pair_generator(
+                fixed_image, moving_image, shrink_factors, smoothing_sigmas
+        ):
+            initial_displacement_field = sitk.Resample(initial_displacement_field, f_image)
+            initial_displacement_field = registration_algorithm.Execute(
+                f_image, m_image, initial_displacement_field
+            )
+        return sitk.DisplacementFieldTransform(initial_displacement_field)
+
+    def iteration_callback(filter):
+        global metric_values
+        print(f"\r{filter.GetElapsedIterations()}: {filter.GetMetric():.2f}", end="")
+        metric_values.append(filter.GetMetric())
+    metric_values = []
+    # Select a Demons filter and configure it.
+    demons_filter = sitk.FastSymmetricForcesDemonsRegistrationFilter()
+    demons_filter.SetNumberOfIterations(2000)
+    # Regularization (update field - viscous, total field - elastic).
+    demons_filter.SetSmoothDisplacementField(True)
+    demons_filter.SetStandardDeviations(1.2)
+
+    # Add our simple callback to the registration filter.
+    demons_filter.AddCommand(
+        sitk.sitkIterationEvent, lambda: iteration_callback(demons_filter)
+    )
+
+    # Run the registration.
+    tx = multiscale_demons(
+        registration_algorithm=demons_filter,
+        fixed_image=fixed_image,
+        moving_image=moving_image,
+        shrink_factors=[4, 2, 1],
+        smoothing_sigmas=[8, 4, 2],
+    )
+
+    # # Compare the initial and final TREs.
+    # (
+    #     initial_errors_mean,
+    #     initial_errors_std,
+    #     _,
+    #     initial_errors_max,
+    #     initial_errors,
+    # ) = ru.registration_errors(
+    #     sitk.Euler2DTransform(), points[fixed_image_index], points[moving_image_index]
+    # )
+    # (
+    #     final_errors_mean,
+    #     final_errors_std,
+    #     _,
+    #     final_errors_max,
+    #     final_errors,
+    # ) = ru.registration_errors(tx, points[fixed_image_index], points[moving_image_index])
+    #
+    # plt.hist(initial_errors, bins=20, alpha=0.5, label="before registration", color="blue")
+    # plt.hist(final_errors, bins=20, alpha=0.5, label="after registration", color="green")
+    # plt.legend()
+    # plt.title("TRE histogram")
+    # print(
+    #     f"\nInitial alignment errors in millimeters, mean(std): {initial_errors_mean:.2f}({initial_errors_std:.2f}), max: {initial_errors_max:.2f}"
+    # )
+    # print(
+    #     f"Final alignment errors in millimeters, mean(std): {final_errors_mean:.2f}({final_errors_std:.2f}), max: {final_errors_max:.2f}"
+    # )
+    resampler = sitk.ResampleImageFilter()
+    resampler.SetReferenceImage(fixed_image)
+    resampler.SetInterpolator(sitk.sitkNearestNeighbor)
+    resampler.SetDefaultPixelValue(0)
+    resampler.SetTransform(tx)
+    out = resampler.Execute(moving_image)
+
+    displayImage(sitk.GetArrayFromImage(out), Title_='registered - multiresolution demon')
+    displayImage(sitk.GetArrayFromImage(moving_image), Title_='label map')
+    # displayImage(sitk.GetArrayFromImage(fixed_image))
+    checkerImg = compare_images(sitk.GetArrayFromImage(out),
+                                sitk.GetArrayFromImage(fixed_image),
+                                method='diff')
+    displayImage(checkerImg, Title_='multiresolution demon')
+    plt.plot(metric_values)
+    plt.show()
+# +----------------------------------------------------------------------+
+# |    Pyramid scheme!
+# |   the registration performance of
+# +----------------------------------------------------------------------+
+if __name__ != '__main__':
+    def command_iteration2(method):
+        global metric_values
+        # print(f"{filter.GetElapsedIterations():3} = {filter.GetMetric():10.5f}")
+        print("metric value: {}".format(method.GetMetricValue()))
+        metric_values.append(method.GetMetricValue())
+
+    # def demons_registration(fixed_image, moving_image, fixed_points=None, moving_points=None):
+        # global metric_values
+    metric_values = []
+    registration_method = sitk.ImageRegistrationMethod()
+
+    # Create initial identity transformation.
+    transform_to_displacment_field_filter = sitk.TransformToDisplacementFieldFilter()
+    transform_to_displacment_field_filter.SetReferenceImage(fixed_image)
+    # The image returned from the initial_transform_filter is transferred to the transform and cleared out.
+    initial_transform = sitk.DisplacementFieldTransform(
+        transform_to_displacment_field_filter.Execute(sitk.Transform(2, sitk.sitkIdentity)))
+
+    # Regularization (update field - viscous, total field - elastic).
+    initial_transform.SetSmoothingGaussianOnUpdate(
+        varianceForUpdateField=0.0, varianceForTotalField=2.0
+    )
+
+    registration_method.SetInitialTransform(initial_transform)
+
+    registration_method.SetMetricAsDemons(1)  # intensities are equal if the difference is less than 10HU
+
+    # Multi-resolution framework.
+    # registration_method.SetShrinkFactorsPerLevel(shrinkFactors=[4, 2, 1])
+    # registration_method.SetSmoothingSigmasPerLevel(smoothingSigmas=[8, 4, 0])
+
+    registration_method.SetInterpolator(sitk.sitkNearestNeighbor)
+    # If you have time, run this code as is, otherwise switch to the gradient descent optimizer
+    # registration_method.SetOptimizerAsConjugateGradientLineSearch(learningRate=1.0, numberOfIterations=20, convergenceMinimumValue=1e-6, convergenceWindowSize=10)
+    registration_method.SetOptimizerAsGradientDescent(
+        learningRate=1.0,
+        numberOfIterations=200,
+        convergenceMinimumValue=1e-6,
+        convergenceWindowSize=10,
+    )
+    registration_method.SetOptimizerScalesFromPhysicalShift()
+    # If corresponding points in the fixed and moving image are given then we display the similarity metric
+    # and the TRE during the registration.
+    # if fixed_points and moving_points:
+    #     registration_method.AddCommand(
+    #         sitk.sitkStartEvent, rc.metric_and_reference_start_plot
+    #     )
+    #     registration_method.AddCommand(
+    #         sitk.sitkEndEvent, rc.metric_and_reference_end_plot
+    #     )
+    #     registration_method.AddCommand(
+    #         sitk.sitkIterationEvent,
+    #         lambda: rc.metric_and_reference_plot_values(
+    #             registration_method, fixed_points, moving_points
+    #         ),
+    #     )
+    registration_method.AddCommand(sitk.sitkIterationEvent, lambda: command_iteration2(registration_method))
+    tx = registration_method.Execute(fixed_image, moving_image)
+    resampler = sitk.ResampleImageFilter()
+    resampler.SetReferenceImage(fixed_image)
+    resampler.SetInterpolator(sitk.sitkNearestNeighbor)
+    resampler.SetDefaultPixelValue(0)
+    resampler.SetTransform(tx)
+    out = resampler.Execute(moving_image)
+
+    displayImage(sitk.GetArrayFromImage(out), Title_='registered - displacement')
+    displayImage(sitk.GetArrayFromImage(moving_image), Title_='label map')
+    # displayImage(sitk.GetArrayFromImage(fixed_image))
+    checkerImg = compare_images(sitk.GetArrayFromImage(out),
+                                sitk.GetArrayFromImage(fixed_image),
+                                method='diff')
+    displayImage(checkerImg, Title_='displacementfield with demon as metric')
+        # return tx, metric_values
+
+    # metric_values = []
+    # tx, metric_values = demons_registration(
+    #     fixed_image=fixed_image,
+    #     moving_image=moving_image,
+    #     fixed_points=None,
+    #     moving_points=None)
+    plt.plot(metric_values)
+    plt.show()
 
 # +-----------------------------------------------+
+# |    Displacement field transform               |
 # |    metric works but registration not good     |
 # |    1. How to fix the number of iterations ?   |
 # +-----------------------------------------------+
@@ -587,7 +918,7 @@ if __name__ != '__main__':
     initial_transform = sitk.CenteredTransformInitializer(fixed_image, moving_image, sitk.AffineTransform(fixed_image.GetDimension()))
     registration_method = sitk.ImageRegistrationMethod()
     registration_method.SetMetricAsMattesMutualInformation(numberOfHistogramBins=500)
-    registration_method.SetOptimizerAsGradientDescent(learningRate=1.0,
+    registration_method.SetOptimizerAsGradientDescent(learningRate=15,
                                                       numberOfIterations=3000,
                                                       estimateLearningRate=registration_method.EachIteration,
                                                      )
@@ -633,7 +964,7 @@ if __name__ != '__main__':
 # +------------------------------------------+
 # |    free from deformation registration    |
 # +------------------------------------------+
-if __name__ == '__main__':
+if __name__ != '__main__':
     def command_iteration2(method):
         global metric_values
         # print(f"{filter.GetElapsedIterations():3} = {filter.GetMetric():10.5f}")
