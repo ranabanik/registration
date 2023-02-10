@@ -10,17 +10,18 @@ from matplotlib.colors import LinearSegmentedColormap
 from skimage.transform import resize
 from skimage.util import compare_images
 import sys
-sys.path.append('C:\\Users\\ranab\\PycharmProjects\\Registration\\registraion')
+# sys.path.append('C:\\Users\\ranab\\PycharmProjects\\Registration\\registraion')
+# sys.path.append(r'/home/banikr/PycharmProjects/registration')
 import random
-import registration_utilities as ru
+# import registration_utilities as ru
 from PIL import Image
-
 random.seed(1001)
 
 # +-------------------------------------+
 # |    prepare mask and segmentation    |
 # +-------------------------------------+
-fileDir = r'E:\SpinalCordInjury\MALDI\HistologyHnE'
+# fileDir = r'E:\SpinalCordInjury\MALDI\HistologyHnE'
+fileDir = r'/media/banikr/banikr/SpinalCordInjury/MALDI/HistologyHnE'
 filePaths = glob(os.path.join(fileDir, '*.Jpeg'))
 print(filePaths)
 if __name__ != '__main__':  # this should be run only once... because it saves the images.
@@ -574,9 +575,10 @@ if __name__ != '__main__':
 
 
 # +------------------------------------------+
+# |  works for all the demons                |
 # |  multiresolution demons + displacement   |
 # +------------------------------------------+
-if __name__ == '__main__':
+if __name__ != '__main__':
     shrink_factors = [2, 2, 1]
     smoothing_sigmas = [4, 4, 0]
     # if np.isscalar(shrink_factors):
@@ -638,9 +640,9 @@ if __name__ == '__main__':
             image.GetPixelID(),
         )
 
-    out = smooth_and_resample(moving_image, shrink_factors=shrink_factors,
-                              smoothing_sigmas=smoothing_sigmas)
-    displayImage(sitk.GetArrayFromImage(out), Title_='smoothed image')
+    # out = smooth_and_resample(moving_image, shrink_factors=shrink_factors,
+    #                           smoothing_sigmas=smoothing_sigmas)
+    # displayImage(sitk.GetArrayFromImage(out), Title_='smoothed image')
 
 
     def multiscale_demons(
@@ -717,32 +719,51 @@ if __name__ == '__main__':
             df_size = fixed_image.GetSize()
             df_spacing = fixed_image.GetSpacing()
 
-        if initial_transform:
-            initial_displacement_field = sitk.TransformToDisplacementField(
-                initial_transform,
-                sitk.sitkVectorFloat64,
-                df_size,
-                fixed_image.GetOrigin(),
-                df_spacing,
-                fixed_image.GetDirection(),
-            )
-        else:
-            initial_displacement_field = sitk.Image(
-                df_size, sitk.sitkVectorFloat64, fixed_image.GetDimension()
-            )
-            initial_displacement_field.SetSpacing(df_spacing)
-            initial_displacement_field.SetOrigin(fixed_image.GetOrigin())
+        # if initial_transform:
+        #     initial_displacement_field = sitk.TransformToDisplacementField(
+        #         initial_transform,
+        #         sitk.sitkVectorFloat64,
+        #         df_size,
+        #         fixed_image.GetOrigin(),
+        #         df_spacing,
+        #         fixed_image.GetDirection(),
+        #     )
+        # else:
+        #     # initial_displacement_field = sitk.Image(
+        #     #     df_size, sitk.sitkVectorFloat64, fixed_image.GetDimension()
+        #     # )
+        #     # initial_displacement_field.SetSpacing(df_spacing)
+        #     # initial_displacement_field.SetOrigin(fixed_image.GetOrigin())
+
+            # rana changed:
+            # initial_displacement_field = sitk.TransformToDisplacementFieldFilter()
+            # initial_displacement_field.SetReferenceImage(fixed_image)
+
 
         # Run the registration.
         # Start at the top of the pyramid and work our way down.
         for f_image, m_image in image_pair_generator(
                 fixed_image, moving_image, shrink_factors, smoothing_sigmas
         ):
-            initial_displacement_field = sitk.Resample(initial_displacement_field, f_image)
-            initial_displacement_field = registration_algorithm.Execute(
-                f_image, m_image, initial_displacement_field
-            )
-        return sitk.DisplacementFieldTransform(initial_displacement_field)
+            # initial_displacement_field = sitk.Resample(initial_displacement_field, f_image)
+            # initial_displacement_field = registration_algorithm.Execute(
+            #     f_image, m_image, initial_displacement_field
+            # )
+
+            # rana changed
+            initialTx = sitk.CenteredTransformInitializer(f_image, m_image,
+                                                          sitk.AffineTransform(f_image.GetDimension()))
+            transform_to_displacment_field_filter = sitk.TransformToDisplacementFieldFilter()
+            transform_to_displacment_field_filter.SetReferenceImage(f_image)
+            displacementTx = sitk.DisplacementFieldTransform(transform_to_displacment_field_filter.Execute
+                                                             (#initialTx))
+                                                              sitk.Transform(2, sitk.sitkIdentity)))
+            displacementTx.SetSmoothingGaussianOnUpdate(varianceForUpdateField=0.0, varianceForTotalField=1.5)
+            displacementField = transform_to_displacment_field_filter.Execute(displacementTx)
+            displacementField = registration_algorithm.Execute(f_image, m_image, displacementField)
+            outTx = sitk.DisplacementFieldTransform(displacementField)
+            # break
+        return outTx #sitk.DisplacementFieldTransform(initial_displacement_field)
 
     def iteration_callback(filter):
         global metric_values
@@ -811,13 +832,13 @@ if __name__ == '__main__':
     checkerImg = compare_images(sitk.GetArrayFromImage(out),
                                 sitk.GetArrayFromImage(fixed_image),
                                 method='diff')
-    displayImage(checkerImg, Title_='multiresolution demon')
+    displayImage(checkerImg, Title_='multiresolution Diffeomorphic Demon')
     plt.plot(metric_values)
     plt.show()
-# +----------------------------------------------------------------------+
-# |    Pyramid scheme!
-# |   the registration performance of
-# +----------------------------------------------------------------------+
+# +-------------------------------------------+
+# |    Pyramid scheme!                        |
+# |   the registration performance of         |
+# +-------------------------------------------+
 if __name__ != '__main__':
     def command_iteration2(method):
         global metric_values
@@ -1075,3 +1096,17 @@ if __name__ != '__main__':
     displayImage(checkerImg, Title_='final registration, fixed-moving overlapped')
     plt.plot(metric_values)
     plt.show()
+
+# +--------------------------------+
+# |     BSpline method intro       |
+# +--------------------------------+
+# if __name__ == '__main__':
+# todo:
+# +------------------------------------------------------+
+# | 1. implement and check BSpline registration method   |
+# | 2. check affine also                                 |
+# | 3. once best method finalized run all 4 sections     |
+# | 4. run registration with Chase/MRI images            |
+# |  |__ 4.1. create 3D spinal cord model                |
+# |  |__ 4.2. incorporate double VAE segmentations       |
+# +------------------------------------------------------+
