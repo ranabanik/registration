@@ -413,7 +413,7 @@ if __name__ != '__main__':
 # +--------------------------------+
 # |    set angle euler works!!     |
 # +--------------------------------+
-if __name__ != '__main__':   # Reference 4 in the notebook
+if __name__ == '__main__':   # Reference 4 in the notebook
     # all_orientations = {'x=0, y=180': (0.0, np.pi),
     #                     'x=180, y=180': (np.pi, 0.0)}
                         # 'x=0, y=180, z=180': (0.0, np.pi, np.pi)}
@@ -1219,7 +1219,7 @@ if __name__ != '__main__':
     plt.show()
     print('Optimizer\'s stopping condition, {0}'.format(registration_method.GetOptimizerStopConditionDescription()))
 
-if __name__ == '__main__':
+if __name__ != '__main__':
     orientations_list = [0, np.pi / 2, np.pi, 3 * np.pi / 2]
     print(orientations_list)
 
@@ -1269,7 +1269,6 @@ if __name__ == '__main__':
     # resampler.SetTransform(final_transform)
     # out = resampler.Execute(moving_image)
     # displayImage(sitk.GetArrayFromImage(out), Title_='final transform')
-
 
 if __name__ != '__main__':
     metric_values = []
