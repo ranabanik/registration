@@ -9,6 +9,9 @@ import matplotlib as mtl
 from matplotlib.colors import LinearSegmentedColormap
 from skimage.transform import resize
 from skimage.util import compare_images
+from skimage.measure import regionprops, label
+from skimage.morphology import area_closing, dilation
+from scipy import ndimage
 import sys
 # sys.path.append('C:\\Users\\ranab\\PycharmProjects\\Registration\\registraion')
 # sys.path.append(r'/home/banikr/PycharmProjects/registration')
@@ -20,8 +23,8 @@ random.seed(1001)
 # +-------------------------------------+
 # |    prepare mask and segmentation    |
 # +-------------------------------------+
-fileDir = r'E:\SpinalCordInjury\MALDI\HistologyHnE'
-# fileDir = r'/media/banikr/banikr/SpinalCordInjury/MALDI/HistologyHnE'
+# fileDir = r'E:\SpinalCordInjury\MALDI\HistologyHnE'
+fileDir = r'/media/banikr/banikr/SpinalCordInjury/MALDI/HistologyHnE'
 filePaths = glob(os.path.join(fileDir, '*.Jpeg'))
 print(filePaths)
 if __name__ != '__main__':  # this should be run only once... because it saves the images.
@@ -84,33 +87,33 @@ def displayImage(matrix, Title_='demo'):
     plt.colorbar()
     plt.show()
 
-def command_iteration(method):
-    global metric_values
-    print("is this running? ")
-    if method.GetOptimizerIteration() == 31:
-        # metric_values = []
-        print(f"\tLevel: {method.GetCurrentLevel()}")
-        print(f"\tScales: {method.GetOptimizerScales()}")
-    print(f"#{method.GetOptimizerIteration()}")
-    print(f"\tMetric Value: {method.GetMetricValue():10.5f}")
-    print(f"\tLearningRate: {method.GetOptimizerLearningRate():10.5f}")
-    if method.GetOptimizerConvergenceValue() != sys.float_info.max:
-        print(
-            "\t Convergence Value: "
-            + f"{method.GetOptimizerConvergenceValue():.5e}"
-        )
-    metric_values.append(method.GetMetricValue())
-    # # print(f"{method.():3} = {method.GetMetricValue():10.5f}")
-    plt.plot(metric_values, 'r')
-    # # plt.plot(multires_iterations, [metric_values[index] for index in multires_iterations], 'b*')
-    plt.xlabel('Iteration Number', fontsize=12)
-    plt.ylabel('Metric Value', fontsize=12)
-    plt.show()
-    # return metric_values
+# def command_iteration(method):
+#     global metric_values
+#     print("is this running? ")
+#     if method.GetOptimizerIteration() == 31:
+#         # metric_values = []
+#         print(f"\tLevel: {method.GetCurrentLevel()}")
+#         print(f"\tScales: {method.GetOptimizerScales()}")
+#     print(f"#{method.GetOptimizerIteration()}")
+#     print(f"\tMetric Value: {method.GetMetricValue():10.5f}")
+#     print(f"\tLearningRate: {method.GetOptimizerLearningRate():10.5f}")
+#     if method.GetOptimizerConvergenceValue() != sys.float_info.max:
+#         print(
+#             "\t Convergence Value: "
+#             + f"{method.GetOptimizerConvergenceValue():.5e}"
+#         )
+#     metric_values.append(method.GetMetricValue())
+#     # # print(f"{method.():3} = {method.GetMetricValue():10.5f}")
+#     plt.plot(metric_values, 'r')
+#     # # plt.plot(multires_iterations, [metric_values[index] for index in multires_iterations], 'b*')
+#     plt.xlabel('Iteration Number', fontsize=12)
+#     plt.ylabel('Metric Value', fontsize=12)
+#     plt.show()
+#     # return metric_values
 
 def command_iteration2(method):
     global metric_values
-    print("metric value: {}".format(method.GetMetricValue()))
+    # print("metric value: {}".format(method.GetMetricValue()))
     metric_values.append(method.GetMetricValue())
 
 def start_plot():
@@ -159,26 +162,102 @@ def plot_values_(filter):
 # |    load and preprocess segmentation files    |
 # +----------------------------------------------+
 if __name__ == '__main__':
-    reconPath = os.path.join(fileDir, 'seg_3.h5')   # change here for different sections.
-    with h5py.File(reconPath, 'r') as pfile:     # saves the data
-        labelMapMALDI = np.array(pfile['segmentation_3'])
+    # reconPath = os.path.join(fileDir, 'seg_3.h5')   # change here for different sections.
+    # with h5py.File(reconPath, 'r') as pfile:     # saves the data
+    #     labelMapMALDI = np.array(pfile['segmentation_3'])
+    #
+    # # plt.imshow(segImg==2)
+    # # segImg[segImg==2]= 0
+    # labelMapMALDI_t = labelMapMALDI.T   # aligns
+    # labelMapMALDI_t[labelMapMALDI_t == 2] = 0
+    # labelMapMALDI_t[labelMapMALDI_t == 1] = 2  # changing WM to match mask
+    # labelMapMALDI_t[labelMapMALDI_t == 4] = 1
+    # # segImg[5:7, 65:67] = 3
+    # displayImage(labelMapMALDI_t, Title_='After alignment and label correction')
+    proteinDir = r'/media/banikr/banikr/SpinalCordInjury/MALDI/210603-Chen_protein_slide_F'
+    saveSegPath = os.path.join(proteinDir, 'segmentation_vae_vae.h5')
 
-    # plt.imshow(segImg==2)
-    # segImg[segImg==2]= 0
-    labelMapMALDI_t = labelMapMALDI.T   # aligns
-    labelMapMALDI_t[labelMapMALDI_t == 2] = 0
-    labelMapMALDI_t[labelMapMALDI_t == 1] = 2  # changing WM to match mask
-    labelMapMALDI_t[labelMapMALDI_t == 4] = 1
-    # segImg[5:7, 65:67] = 3
-    displayImage(labelMapMALDI_t, Title_='After alignment and label correction')
+    with h5py.File(saveSegPath, 'r') as pfile:  # saves the data
+        segImg = np.array(pfile['seg'])
+    # displayImage(segImg)
+    maskImg = np.zeros_like(segImg)
+    maskImg[np.where(segImg != 0)] = 1
+    # displayImage(maskImg)
+    labeled_array, nFeatures = ndimage.label(maskImg, structure=np.ones((3, 3)))
+    print(nFeatures, "sections found...")
+    # displayImage(labeled_array)
+    # secID = 1  # must be 1 to 4
+    for secID in [2]:  # ,3,4]:
+        minx, miny = np.inf, np.inf
+        maxx, maxy = -np.inf, -np.inf
+        for x in range(labeled_array.shape[0]):
+            for y in range(labeled_array.shape[1]):
+                if labeled_array[x, y] == secID:
+                    minx, miny = min(minx, x), min(miny, y)
+                    maxx, maxy = max(maxx, x), max(maxy, y)
+        regionshape = [maxx - minx + 1,
+                       maxy - miny + 1]
+        # print(minx, miny, maxx, maxy)
+        secImg = segImg[minx:maxx, miny:maxy]
+    displayImage(secImg, Title_='VAE segmentation')
+    # secImg[np.where(secImg == 1) or
+    secImg[np.where(secImg == 2)] = 1
+    secImg[np.where(secImg == 3)] = 2
+    secImg[np.where(secImg == 4)] = 2
+    secImg[np.where(secImg == 5)] = 3
+    displayImage(secImg, Title_='3 label segmentation')
 
-    maskpath = glob(os.path.join(fileDir, 'cropped_hne_mask_3.nii.gz'))[0]
+    secImgMorphed = np.zeros_like(secImg)
+    for tissue_label in [2, 1]:
+        blobs_labels = label(secImg == tissue_label, background=0, connectivity=2)
+        regionProperties = regionprops(label_image=blobs_labels)
+        if tissue_label == 2:
+            regionsBiggerToSmallerList = np.argsort([prop.area_filled for prop in regionProperties])[::-1][0:3]
+        if tissue_label == 1:
+            regionsBiggerToSmallerList = np.argsort([prop.area_filled for prop in regionProperties])[::-1][0:1]
+        morphedTissueImg = np.zeros_like(blobs_labels)
+        for region in regionsBiggerToSmallerList:
+            for coord in regionProperties[region].coords:
+                # print(coord)
+                morphedTissueImg[coord[0], coord[1]] = 1
+        # displayImage(morphedTissueImg, )
+        square = np.array([[1, 1],
+                           [1, 1]])
+
+        def multi_dil(im, num, element=square):
+            for i in range(num):
+                im = dilation(im, element)
+            return im
+
+        morphedTissueImg = multi_dil(morphedTissueImg, 1)
+        morphedTissueImg = area_closing(morphedTissueImg, area_threshold=1000, connectivity=50)
+        # displayImage(morphedTissueImg)
+        secImgMorphed[np.where(morphedTissueImg)] = tissue_label
+    # displayImage(secImgMorphed, Title_="morphed")
+    # secImgMorphed[np.where(secImg != 0) and np.where(secImgMorphed == 0)] = secImg
+    # secImg[np.where(secImgMorphed != 0)] = secImgMorphed
+    # print("label morphed...")
+    # displayImage(secImg, Title_="morphed 2")
+    for tissue_label in [1, 2]:
+        mask = (secImgMorphed == tissue_label)
+        secImg[mask] = tissue_label
+    # displayImage(secImg, 'Morphed 2')
+
+    # lut = np.array([0, 3, 1, 2])
+    # # displayImage(lut[secImg])
+    # secImg_ = np.zeros_like(secImg)
+    # for i, l in enumerate(lut):
+    #     secImg_[np.where(secImg == i)] = l
+    # displayImage(secImg_, Title_='label exchanged')
+    # secImg = secImg_
+
+    maskpath = glob(os.path.join(fileDir, 'cropped_hne_mask_2.nii.gz'))[0]
     maskHnE = nib.load(maskpath).get_fdata()
     maskHnE_0 = maskHnE[..., 0]
     # displayImage(maskHnE_0, Title_='before resize')
-    # print(np.unique(maskHnE_0))
+    print(np.unique(maskHnE_0))
     maskHnE_0_resized = resize(maskHnE_0,
-                               labelMapMALDI_t.shape,
+                               secImg.T.shape,
                                # mode='edge',
                                anti_aliasing=False,      # to preserve label values
                                preserve_range=True,
@@ -192,10 +271,10 @@ if __name__ == '__main__':
     else:
         print("labels changed after resize")
         raise ValueError
-    # displayImage(maskHnE_0_resized, Title_='after resize')
+    displayImage(maskHnE_0_resized, Title_='after resize')
 
-    mask_itk = sitk.GetImageFromArray(maskHnE_0_resized)
-    label_itk = sitk.GetImageFromArray(labelMapMALDI_t)
+    mask_itk = sitk.GetImageFromArray(secImg)
+    label_itk = sitk.GetImageFromArray(maskHnE_0_resized)
     fixed_image = sitk.Cast(label_itk, sitk.sitkFloat32)
     moving_image = sitk.Cast(mask_itk, sitk.sitkFloat32)
 
@@ -411,9 +490,40 @@ if __name__ != '__main__':
     displayImage(checkerImg)
 
 # +--------------------------------+
+# |    direct affine transform     |
+# +--------------------------------+
+if __name__ != '__main__':
+    affine = sitk.AffineTransform(fixed_image.GetDimension())
+    print(affine)
+    metric_values = []
+    registration_method = sitk.ImageRegistrationMethod()
+    # registration_method.SetMetricAsMattesMutualInformation(numberOfHistogramBins=500)
+    registration_method.SetMetricAsMeanSquares()
+    registration_method.SetMetricSamplingStrategy(registration_method.RANDOM)
+    registration_method.SetMetricSamplingPercentage(0.001)
+    registration_method.SetInitialTransform(affine, inPlace=True)
+    registration_method.SetOptimizerAsRegularStepGradientDescent(learningRate=2.0,
+                                                                 minStep=1e-4,
+                                                                 numberOfIterations=500,
+                                                                 gradientMagnitudeTolerance=1e-8)
+    registration_method.SetInterpolator(sitk.sitkNearestNeighbor)
+
+    registration_method.AddCommand(sitk.sitkIterationEvent, lambda: command_iteration2(registration_method))
+    tx = registration_method.Execute(fixed_image, moving_image)
+    resampler = sitk.ResampleImageFilter()
+    resampler.SetReferenceImage(fixed_image)
+    resampler.SetInterpolator(sitk.sitkNearestNeighbor)
+    resampler.SetDefaultPixelValue(0)
+    resampler.SetTransform(tx)
+    out = resampler.Execute(moving_image)
+
+    plt.plot(metric_values)
+    plt.show()
+
+# +--------------------------------+
 # |    set angle euler works!!     |
 # +--------------------------------+
-if __name__ == '__main__':   # Reference 4 in the notebook
+if __name__ != '__main__':   # Reference 4 in the notebook
     # all_orientations = {'x=0, y=180': (0.0, np.pi),
     #                     'x=180, y=180': (np.pi, 0.0)}
                         # 'x=0, y=180, z=180': (0.0, np.pi, np.pi)}
@@ -433,7 +543,7 @@ if __name__ == '__main__':   # Reference 4 in the notebook
     registration_method.SetMetricAsMattesMutualInformation(numberOfHistogramBins=500)
     registration_method.SetMetricSamplingStrategy(registration_method.RANDOM)
     registration_method.SetMetricSamplingPercentage(0.001)
-    registration_method.SetInitialTransform(initial_transform, inPlace=False)
+    registration_method.SetInitialTransform(initial_transform, inPlace=True)
     registration_method.SetOptimizerAsRegularStepGradientDescent(learningRate=2.0,
                                                                  minStep=1e-4,
                                                                  numberOfIterations=500,
@@ -463,7 +573,7 @@ if __name__ == '__main__':   # Reference 4 in the notebook
     plt.show()
 
     initial_transform.SetAngle(best_orientation)
-    registration_method.SetInitialTransform(initial_transform, inPlace=False)
+    registration_method.SetInitialTransform(initial_transform, inPlace=True)
     eulerTx = registration_method.Execute(fixed_image, moving_image)
     resampler = sitk.ResampleImageFilter()
     resampler.SetReferenceImage(fixed_image)
@@ -479,7 +589,7 @@ if __name__ == '__main__':   # Reference 4 in the notebook
                                 sitk.GetArrayFromImage(fixed_image),
                                 method='diff')
     displayImage(checkerImg, Title_='mask-label overlapped')
-    del registration_method, initial_transform, eulerTx
+    # del registration_method, initial_transform, eulerTx
     moving_image = sitk.Cast(out, sitk.sitkFloat32)
 
 # +----------------------------------------------------------------------+
@@ -839,6 +949,7 @@ if __name__ != '__main__':
     displayImage(checkerImg, Title_='multiresolution Diffeomorphic Demon')
     plt.plot(metric_values)
     plt.show()
+
 # +-------------------------------------------+
 # |    Pyramid scheme!                        |
 # |   the registration performance of         |
@@ -1161,7 +1272,6 @@ if __name__ != '__main__':
     plt.xlabel("Iterations")
     plt.ylabel("Metric value")
     plt.show()
-# todo:
 # +------------------------------------------------------+
 # | 1. implement and check BSpline registration method   |
 # | 2. check affine also                                 |
@@ -1191,7 +1301,7 @@ if __name__ != '__main__':
     # we take advantage of the scaling functionality provided by the optimizers. We know that the first N ×N elements
     # of the parameters array correspond to the rotation matrix factor, and the last N are the components of the translation
     # to be applied after multiplication with the matrix is performed.
-    registration_method.SetOptimizerScales([1, 1, 1, 1, tsScale])    # todo
+    registration_method.SetOptimizerScales([1, 1, 1, 1, tsScale])
     registration_method.SetInterpolator(sitk.sitkNearestNeighbor)
     # affine = sitk.AffineTransform()
     # affine.Execute()
@@ -1354,4 +1464,254 @@ if __name__ != '__main__':
     # plt.xlabel('Iteration Number', fontsize=12)
     # plt.ylabel('Metric Value', fontsize=12)
     # plt.show()
+
+# +-----------------------------+
+# |   affine registration ...   |
+# +-----------------------------+
+if __name__ != '__main__':
+    metric_values = []
+    initial_transform = sitk.CenteredTransformInitializer(fixed_image,
+                                                          moving_image,
+                                                          sitk.AffineTransform(2),
+                                                          sitk.CenteredTransformInitializerFilter.GEOMETRY)
+    registration_method = sitk.ImageRegistrationMethod()
+    registration_method.SetInterpolator(sitk.sitkNearestNeighbor)
+    registration_method.SetInitialTransform(initial_transform, inPlace=True)
+    registration_method.SetMetricSamplingStrategy(registration_method.NONE)
+    # registration_method.SetOptimizerAsGradientDescent(lear)
+    translationScale = 1.0 / 100.0
+    registration_method.SetOptimizerAsRegularStepGradientDescent(learningRate=1.0, minStep=1e-4,
+                                                                 numberOfIterations=100)
+    registration_method.SetOptimizerScales(scales=[1.0, 1.0, 1.0, 1.0, translationScale, translationScale])
+    registration_method.AddCommand(sitk.sitkIterationEvent, lambda: command_iteration2(registration_method))
+    final_transform = registration_method.Execute(fixed_image, moving_image)
+    plt.plot(metric_values)
+    plt.show()
+    print('Optimizer\'s stopping condition, {0}'.format(registration_method.GetOptimizerStopConditionDescription()))
+    print("here")
+
+if __name__ != '__main__':
+    print("here")
+    degrees = np.linspace(0, 360, 1000)
+    radians = np.deg2rad(degrees)
+
+    initial_transform = sitk.Euler2DTransform(sitk.CenteredTransformInitializer(
+        fixed_image,
+        moving_image,
+        sitk.Euler2DTransform(),
+        sitk.CenteredTransformInitializerFilter.GEOMETRY))
+    # print("Start of registration: \n", initial_transform)
+    # Registration framework setup.
+    registration_method = sitk.ImageRegistrationMethod()
+    registration_method.SetMetricAsMattesMutualInformation(numberOfHistogramBins=500)
+    registration_method.SetMetricSamplingStrategy(registration_method.RANDOM)
+    registration_method.SetMetricSamplingPercentage(0.001)
+    registration_method.SetInitialTransform(initial_transform, inPlace=False)
+
+    registration_method.SetOptimizerAsRegularStepGradientDescent(learningRate=2.0,
+                                                                 minStep=1e-4,
+                                                                 numberOfIterations=500,
+                                                                 gradientMagnitudeTolerance=1e-8)
+    registration_method.SetInterpolator(sitk.sitkNearestNeighbor)
+    registration_method.SetOptimizerScalesFromIndexShift()
+    # best_orientation = (0.0, 0.0)
+    best_similarity_value = registration_method.MetricEvaluate(fixed_image, moving_image)
+    similarity_value = []
+    # Iterate over all other rotation parameter settings.
+    for i, angle in enumerate(radians):  # .items():
+        initial_transform.SetAngle(angle)
+        registration_method.SetInitialTransform(initial_transform)
+        current_similarity_value = registration_method.MetricEvaluate(fixed_image, moving_image)
+        similarity_value.append(current_similarity_value)
+        # print("current similarity value: ", current_similarity_value)
+        if current_similarity_value < best_similarity_value:
+            best_similarity_value = current_similarity_value
+            best_angle = np.rad2deg(angle)
+        # else:
+        #     best_orientation = orientation
+    print('best orientation is: ' + str(best_angle))
+    print("best similarity value", best_similarity_value)
+
+    plt.plot(degrees, similarity_value, 'b')
+    plt.plot(best_angle, best_similarity_value, 'r^')
+    plt.show()
+
+    initial_transform.SetAngle(np.deg2rad(best_angle))
+    registration_method.SetInitialTransform(initial_transform, inPlace=True)
+    eulerTx = registration_method.Execute(fixed_image, moving_image)
+    resampler = sitk.ResampleImageFilter()
+    resampler.SetReferenceImage(fixed_image)
+    resampler.SetInterpolator(sitk.sitkNearestNeighbor)
+    resampler.SetDefaultPixelValue(0)
+    resampler.SetTransform(eulerTx)
+
+    out = resampler.Execute(moving_image)
+    displayImage(sitk.GetArrayFromImage(out), Title_='registered image(Euler2D)')
+    displayImage(sitk.GetArrayFromImage(moving_image), Title_='moving image')
+    displayImage(sitk.GetArrayFromImage(fixed_image), Title_='fixed image')
+    # print("End of registration: \n", initial_transform)
+
+    # Affine Transform now:
+    metric_values = []
+    affine = sitk.AffineTransform(2)
+    # print(initial_transform.GetMatrix())
+    # print(initial_transform.GetTranslation())
+    # print(initial_transform.GetCenter())
+    affine.SetMatrix(initial_transform.GetMatrix())
+    affine.SetTranslation(initial_transform.GetTranslation())
+    affine.SetCenter(initial_transform.GetCenter())
+    registration_method.SetInitialTransform(affine, inPlace=True)
+    # print("1")
+    print("before affine: \n", affine)
+    registration_method.AddCommand(sitk.sitkIterationEvent, lambda: command_iteration2(registration_method))
+    affine_tx = registration_method.Execute(fixed_image, moving_image)
+    # print("2")
+    # resampler = sitk.ResampleImageFilter()
+    # resampler.SetReferenceImage(fixed_image)
+    # resampler.SetInterpolator(sitk.sitkNearestNeighbor)
+    # resampler.SetDefaultPixelValue(0)
+    # print(affine_tx)
+    # print("3")
+    resampler.SetTransform(affine_tx)
+    # resampler.SetOutputPixelType(moving_image.GetPixelID())
+    out = resampler.Execute(moving_image)
+    print("after affine \n", affine_tx)
+    displayImage(sitk.GetArrayFromImage(out), Title_='registered image(Affine)')
+    plt.plot(metric_values)
+    plt.show()
+
+# todo: `Euler + Affine + FSFDemon` works nicely but ...
+#       1. Parameters could be optimized for better resluts
+#          1.1. How ?
+#       2. Plotting issues of affine metrics
+#       3. Run same method(finalized) for all sections
+
+if __name__ == '__main__':
+    def command_iteration2(method):
+        global metric_values
+        print("metric value: {}".format(method.GetMetricValue()))
+        metric_values.append(method.GetMetricValue())
+
+    def command_iteration(filter):
+        global metric_values
+        print(f"{filter.GetElapsedIterations():3} = {filter.GetMetric():10.5f}")
+        metric_values.append(filter.GetMetric())
+
+    metric_values = []
+    degrees = np.linspace(0, 360, 1000)
+    radians = np.deg2rad(degrees)
+
+    initial_transform = sitk.Euler2DTransform(sitk.CenteredTransformInitializer(
+        fixed_image,
+        moving_image,
+        sitk.Euler2DTransform(),
+        sitk.CenteredTransformInitializerFilter.GEOMETRY))
+    registration_method = sitk.ImageRegistrationMethod()
+    registration_method.SetMetricAsMattesMutualInformation(numberOfHistogramBins=500)
+    registration_method.SetMetricSamplingStrategy(registration_method.NONE)
+    registration_method.SetInitialTransform(initial_transform, inPlace=False)
+    registration_method.SetOptimizerAsRegularStepGradientDescent(learningRate=0.50,
+                                                                 minStep=1e-3,
+                                                                 numberOfIterations=500,
+                                                                 gradientMagnitudeTolerance=1e-2)
+    registration_method.SetInterpolator(sitk.sitkNearestNeighbor)
+    registration_method.SetOptimizerScalesFromIndexShift()
+    best_angle = 0.0
+    best_similarity_value = registration_method.MetricEvaluate(fixed_image, moving_image)
+    similarity_value = []
+    for i, angle in enumerate(radians):  # .items():
+        initial_transform.SetAngle(angle)
+        registration_method.SetInitialTransform(initial_transform)
+        current_similarity_value = registration_method.MetricEvaluate(fixed_image, moving_image)
+        similarity_value.append(current_similarity_value)
+        if current_similarity_value < best_similarity_value:
+            best_similarity_value = current_similarity_value
+            best_angle = np.rad2deg(angle)
+    print('best orientation is: ' + str(best_angle))
+    print("best similarity value", best_similarity_value)
+    plt.plot(degrees, similarity_value, 'b')
+    plt.plot(best_angle, best_similarity_value, 'r^')
+    plt.show()
+    initial_transform.SetAngle(np.deg2rad(best_angle))
+    registration_method.SetInitialTransform(initial_transform, inPlace=True)
+    eulerTx = registration_method.Execute(fixed_image, moving_image)
+    resampler = sitk.ResampleImageFilter()
+    resampler.SetReferenceImage(fixed_image)
+    resampler.SetInterpolator(sitk.sitkNearestNeighbor)
+    resampler.SetDefaultPixelValue(0)
+    resampler.SetTransform(eulerTx)
+    out = resampler.Execute(moving_image)
+    displayImage(sitk.GetArrayFromImage(fixed_image), Title_='fixed image')
+    displayImage(sitk.GetArrayFromImage(moving_image), Title_='moving image')
+    displayImage(sitk.GetArrayFromImage(out), Title_='Euler2D image')
+    affine = sitk.AffineTransform(fixed_image.GetDimension())
+    # affine = sitk.CenteredTransformInitializer(fixed_image,
+    #                                            moving_image,
+    #                                            sitk.AffineTransform(fixed_image.GetDimension()),
+    #                                            # sitk.CenteredTransformInitializerFilter.GEOMETRY
+    #                                            )
+    # affine.SetMatrix(initial_transform.GetMatrix())
+    # affine.SetTranslation(initial_transform.GetTranslation())
+    # affine.SetCenter(initial_transform.GetCenter())
+    registration_method.SetMovingInitialTransform(eulerTx)
+    registration_method.SetInitialTransform(affine, inPlace=True)
+    registration_method.SetMetricAsANTSNeighborhoodCorrelation(4)
+    # registration_method.SetOptimizerScalesFromIndexShift()
+    registration_method.SetOptimizerAsGradientDescent(
+        learningRate=.50,
+        numberOfIterations=300,
+        estimateLearningRate=registration_method.EachIteration,
+    )
+    registration_method.AddCommand(sitk.sitkIterationEvent, lambda: command_iteration2(registration_method))
+    affineTx = registration_method.Execute(fixed_image, moving_image)
+    compositeTx = sitk.CompositeTransform([eulerTx, affineTx])
+    resampler = sitk.ResampleImageFilter()
+    resampler.SetReferenceImage(fixed_image)
+    resampler.SetInterpolator(sitk.sitkNearestNeighbor)
+    resampler.SetDefaultPixelValue(0)
+    resampler.SetTransform(compositeTx)
+    out = resampler.Execute(moving_image)
+    displayImage(sitk.GetArrayFromImage(out), Title_='Euler2D + Affine image')
+    # plt.plot(metric_values)
+    # plt.show()
+    checkerImg = compare_images(sitk.GetArrayFromImage(out),
+                                sitk.GetArrayFromImage(fixed_image),
+                                method='diff')
+    displayImage(checkerImg, Title_='Difference')
+
+    # deformable registration
+    metric_values = []
+    demons = sitk.FastSymmetricForcesDemonsRegistrationFilter()
+    demons.SetNumberOfIterations(5000)
+    demons.SetStandardDeviations(1.2)
+    demons.AddCommand(sitk.sitkIterationEvent, lambda: command_iteration(demons))
+    # # metric_values.append()
+    transform_to_displacment_field_filter = sitk.TransformToDisplacementFieldFilter()
+    transform_to_displacment_field_filter.SetReferenceImage(fixed_image)
+    displacementTx = sitk.DisplacementFieldTransform(transform_to_displacment_field_filter.Execute
+                                                     (sitk.Transform(fixed_image.GetDimension(),
+                                                                     sitk.sitkIdentity)))
+    displacementTx.SetSmoothingGaussianOnUpdate(varianceForUpdateField=0.0, varianceForTotalField=1.5)
+    displacementField = transform_to_displacment_field_filter.Execute(displacementTx)
+    displacementField = demons.Execute(fixed_image, out, displacementField)
+    outTx = sitk.DisplacementFieldTransform(displacementField)
+    resampler = sitk.ResampleImageFilter()
+    resampler.SetReferenceImage(fixed_image)
+    resampler.SetInterpolator(sitk.sitkNearestNeighbor)
+    resampler.SetDefaultPixelValue(0)
+    resampler.SetTransform(outTx)
+    out = resampler.Execute(out)
+    displayImage(sitk.GetArrayFromImage(out), Title_='Euler + Affine + FSFDemonsRegistrationFilter')
+    # displayImage(sitk.GetArrayFromImage(moving_image), Title_='moving image')
+    # displayImage(sitk.GetArrayFromImage(fixed_image), Title_='fixed image')
+    checkerImg = compare_images(sitk.GetArrayFromImage(out),
+                                sitk.GetArrayFromImage(fixed_image),
+                                method='diff')
+    displayImage(checkerImg, Title_='Difference 2')
+    plt.plot(metric_values)
+    plt.ylabel("Registration metric")
+    plt.xlabel("Iterations")
+    plt.show()
+
+
 
