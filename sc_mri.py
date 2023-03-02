@@ -20,6 +20,7 @@ from sklearn.mixture import GaussianMixture as GMM
 from scipy import ndimage
 from kneed import KneeLocator
 import SimpleITK as sitk
+import cv2
 
 def displayMR(MR, Title_= 'Demo'):
     plt.imshow(MR, origin='lower', cmap='gray')
@@ -120,8 +121,10 @@ if __name__ != '__main__':
 # |    get segmentation of a section    |
 # +~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~+
 if __name__ == '__main__':
-    proteinDir = r'E:\SpinalCordInjury\MALDI\210603-Chen_protein_slide_F'
+    # proteinDir = r'E:\SpinalCordInjury\MALDI\210603-Chen_protein_slide_F'
+    proteinDir = r'/media/banikr/banikr/SpinalCordInjury/MALDI/210603-Chen_protein_slide_F'
     saveSegPath = os.path.join(proteinDir, 'segmentation_vae_vae.h5')
+
     with h5py.File(saveSegPath, 'r') as pfile:  # saves the data
         segImg = np.array(pfile['seg'])
     # displayImage(segImg)
@@ -168,7 +171,8 @@ if __name__ == '__main__':
 # +~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~+
 if __name__ == '__main__':
     mr_slice = 1
-    dataFold = r'E:\SpinalCordInjury\from_Chase\MaldiRatNii\MaldiRat\Week 2\gems_MT_anat_axial_09.img'
+    # dataFold = r'E:\SpinalCordInjury\from_Chase\MaldiRatNii\MaldiRat\Week 2\gems_MT_anat_axial_09.img'
+    dataFold = r'/media/banikr/banikr/SpinalCordInjury/from_Chase/MaldiRatNii/MaldiRat/Week 2/gems_MT_anat_axial_09.img'
     print(os.path.basename(dataFold))
     dataFiles = glob(os.path.join(dataFold, '*.nii'))
     # print(dataFiles)
@@ -220,15 +224,78 @@ if __name__ == '__main__':
     # mr_cropped = mrImg[rmin-1:rmax+2, cmin-1:cmax+2]#, :]
     mr_cropped = mrImg[rmin:rmax + 1, cmin:cmax + 1]
     print(mr_cropped.shape)
-
+    # resize mri just for visualization...
+    # mr_resized = resize(mr_cropped,
+    #                     secImg.T.shape,
+    #                     # mode='edge',
+    #                     anti_aliasing=False,  # to preserve label values
+    #                     preserve_range=True,
+    #                     order=0)
     # mr_slice = 2
     # plt.imshow(mr_cropped[..., mr_slice], cmap='gray')
     # plt.colorbar()
     # plt.show()
     # print("Finally we have a MSI segmentation and a MRI slice scan...")
     # mrImg = mr_cropped[..., mr_slice]
-    mrImgNorm = mr_cropped / np.max(mr_cropped)
-    displayMR(mrImgNorm, Title_="normalized")
+    # mrImgNorm = mr_cropped / np.max(mr_cropped)
+    mrImgNorm = mr_cropped/ np.max(mr_cropped)
+    displayMR(mrImgNorm, Title_="resized - normalized")
+    # from scipy.ndimage.filters import maximum_filter, minimum_filter, gaussian_filter
+    # blurred_image = maximum_filter(mrImgNorm, size=2)
+    # # displayMR(blurred_image, Title_='maximum')
+    # mrImgNorm = minimum_filter(blurred_image, size=3)
+    # displayMR(mrImgNorm, Title_='maximum - minimum')
+    #
+    # radius = 3
+    # mrImgNorm = gaussian_filter(mrImgNorm, sigma=radius)
+    # displayMR(mrImgNorm, Title_='Gaussian')
+
+    # todo
+    # +~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~+
+    # |   enhance the MR image: what can be done?
+    # |   1. Get better data from Chase
+    # |      |_ if not
+    # |   2. Median or filter to denoise
+    # |   3. CLAHE or mCLAHE for contrast enhancement
+    # |   4. ITK-snap or photoshop
+    # +~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~+
+    # hist, bins = np.histogram(mr_cropped.flatten(), np.max(mr_cropped))
+    # cdf = hist.cumsum()
+    # cdf_normalized = cdf * float(hist.max()) / cdf.max()
+    # plt.plot(cdf_normalized, color='b')
+    # plt.hist(mr_cropped.flatten(), 256, [0, 256], color='r')
+    # # plt.xlim([0, 256])
+    # plt.legend(('cdf', 'histogram'), loc='upper left')
+    # plt.show()
+    # min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(mr_cropped)
+    # new_img = np.zeros(mr_cropped.shape, dtype=np.uint8)
+    # new_img = cv2.normalize(mr_cropped, new_img, 0, 1, cv2.NORM_MINMAX)
+    # displayMR(mr_cropped, Title_='old')
+    # displayMR(new_img, Title_='new')
+
+    # from skimage import exposure
+    # data_rescaled = exposure.rescale_intensity(mr_cropped, out_range=(0, 1))
+    # data_eq = exposure.equalize_hist(data_rescaled)
+    # fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(8, 4))
+    #
+    # axes[0].imshow(data_rescaled, cmap='gray')
+    # axes[0].set_title('Rescaled')
+    # axes[1].imshow(data_eq, cmap='gray')
+    # axes[1].set_title('Histogram Equalized')
+    # plt.show()
+
+    # array = mr_cropped # sitk.GetArrayFromImage(mr_cropped)
+    #
+    # # Normalize the array
+    # array = (array - np.min(array)) / (np.max(array) - np.min(array))
+    #
+    # # Perform histogram equalization
+    # array_eq = sitk.GetArrayFromImage(sitk.EqualizeHistogram(sitk.GetImageFromArray(array)))
+    # # Convert back to an image
+    # # image_eq = sitk.GetImageFromArray(array_eq)
+    # # image_eq.CopyInformation(image)
+    # displayMR(array, Title_='old')
+    # displayMR(array_eq, Title_='new')
 # +~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~+
 # |    morphological operations     |
 # |    1. Gray Matter(butterfly)    |
@@ -279,14 +346,14 @@ if __name__ == '__main__':
     #                         preserve_range=True,
     #                         order=0)
     # displayImage(secImg_resized, Title_="resized")
-    print("Resized segmentation image..")
+    # print("Resized segmentation image..")
     mrImgNorm = resize(mrImgNorm,
                        secImg.T.shape,
                        # mode='edge',
                        anti_aliasing=False,  # to preserve label values
                        preserve_range=True,
-                       order=3)
-    displayMR(mrImgNorm, Title_="resized")
+                       order=1)
+    displayMR(mrImgNorm, Title_="resized-norm")
     # print("Resized segmentation image..")
     # secImg[np.where(secImg == 3)] = 0
     lut = np.array([0, 3, 1, 2])
@@ -302,7 +369,7 @@ if __name__ == '__main__':
 # +~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~+
 if __name__ == '__main__':
     mrItk = sitk.GetImageFromArray(mrImgNorm)
-    segItk = sitk.GetImageFromArray(secImg)     # todo _resized)
+    segItk = sitk.GetImageFromArray(secImg)
     fixed_image = sitk.Cast(mrItk, sitk.sitkFloat32)
     moving_image = sitk.Cast(segItk, sitk.sitkFloat32)
     print("image shapes: ", fixed_image.GetSize(), moving_image.GetSize())
