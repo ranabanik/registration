@@ -176,7 +176,6 @@ if __name__ == '__main__':
     # displayImage(labelMapMALDI_t, Title_='After alignment and label correction')
     proteinDir = r'/media/banikr/banikr/SpinalCordInjury/MALDI/210603-Chen_protein_slide_F'
     saveSegPath = os.path.join(proteinDir, 'segmentation_vae_vae.h5')
-
     with h5py.File(saveSegPath, 'r') as pfile:  # saves the data
         segImg = np.array(pfile['seg'])
     # displayImage(segImg)
@@ -187,7 +186,7 @@ if __name__ == '__main__':
     print(nFeatures, "sections found...")
     # displayImage(labeled_array)
     # secID = 1  # must be 1 to 4
-    for secID in [2]:  # ,3,4]:
+    for secID in [3]:  # ,3,4]:
         minx, miny = np.inf, np.inf
         maxx, maxy = -np.inf, -np.inf
         for x in range(labeled_array.shape[0]):
@@ -251,10 +250,10 @@ if __name__ == '__main__':
     # displayImage(secImg_, Title_='label exchanged')
     # secImg = secImg_
 
-    maskpath = glob(os.path.join(fileDir, 'cropped_hne_mask_2.nii.gz'))[0]
+    maskpath = glob(os.path.join(fileDir, 'cropped_hne_mask_3.nii.gz'))[0]
     maskHnE = nib.load(maskpath).get_fdata()
     maskHnE_0 = maskHnE[..., 0]
-    # displayImage(maskHnE_0, Title_='before resize')
+    displayImage(maskHnE_0, Title_='before resize')
     print(np.unique(maskHnE_0))
     maskHnE_0_resized = resize(maskHnE_0,
                                secImg.T.shape,
@@ -1581,10 +1580,12 @@ if __name__ != '__main__':
     plt.show()
 
 # todo: `Euler + Affine + FSFDemon` works nicely but ...
-#       1. Parameters could be optimized for better resluts
-#          1.1. How ?
-#       2. Plotting issues of affine metrics
-#       3. Run same method(finalized) for all sections
+#       1. Run same method(finalized) for all sections
+#          1.1. Morphological output of VAE must be curated before registration
+#       2. Parameters could be optimized for better results
+#          2.1. How ?
+#       3. Plotting issues of affine metrics
+
 
 if __name__ == '__main__':
     def command_iteration2(method):
