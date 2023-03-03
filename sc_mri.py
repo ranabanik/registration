@@ -120,7 +120,7 @@ if __name__ != '__main__':
 # +~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~+
 # |    get segmentation of a section    |
 # +~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~+
-if __name__ == '__main__':
+if __name__ != '__main__':
     # proteinDir = r'E:\SpinalCordInjury\MALDI\210603-Chen_protein_slide_F'
     proteinDir = r'/media/banikr/banikr/SpinalCordInjury/MALDI/210603-Chen_protein_slide_F'
     saveSegPath = os.path.join(proteinDir, 'segmentation_vae_vae.h5')
@@ -170,13 +170,15 @@ if __name__ == '__main__':
 # |     |_ Demon/Bspline?                                      |
 # +~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~+
 if __name__ == '__main__':
-    mr_slice = 1
+    mr_slice = -1
     # dataFold = r'E:\SpinalCordInjury\from_Chase\MaldiRatNii\MaldiRat\Week 2\gems_MT_anat_axial_09.img'
-    dataFold = r'/media/banikr/banikr/SpinalCordInjury/from_Chase/MaldiRatNii/MaldiRat/Week 2/gems_MT_anat_axial_09.img'
+    # dataFold = r'/media/banikr/banikr/SpinalCordInjury/from_Chase/MaldiRatNii/MaldiRat/Week 2/gems_MT_anat_axial_09.img'
+    dataFold = r'/media/banikr/banikr/SpinalCordInjury/Chase_high_res'
     print(os.path.basename(dataFold))
     dataFiles = glob(os.path.join(dataFold, '*.nii'))
     # print(dataFiles)
-    niiPath = os.path.join(dataFold, 'gems_MT_anat_axial_09.img.nii.gz')
+    # niiPath = os.path.join(dataFold, 'gems_MT_anat_axial_09.img.nii.gz')
+    niiPath = os.path.join(dataFold, '9.nii')
     mr_block = nib.load(niiPath).get_fdata()
     # print(mr_block.shape)
     # mr_cropped = mr_block[55:72, 55:80, mr_slice]
@@ -205,7 +207,8 @@ if __name__ == '__main__':
     # plt.imshow(mr_norm, cmap='gray')
     # plt.colorbar()
     # plt.show()
-    cropMaskPath = os.path.join(dataFold, 'SC_mask_for_crop.nii.gz')
+    # cropMaskPath = os.path.join(dataFold, 'SC_mask_for_crop.nii.gz')
+    cropMaskPath = os.path.join(dataFold, '9_SC_mask.nii.gz')
     crop_block = nib.load(cropMaskPath).get_fdata()
 
     mrImg = mr_block[..., mr_slice]
@@ -296,13 +299,14 @@ if __name__ == '__main__':
     # # image_eq.CopyInformation(image)
     # displayMR(array, Title_='old')
     # displayMR(array_eq, Title_='new')
+
 # +~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~+
 # |    morphological operations     |
 # |    1. Gray Matter(butterfly)    |
 # |    2. White Matter              |
 # |    3. Connective tissues        |
 # +~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~+
-if __name__ == '__main__':
+if __name__ != '__main__':
     secImgMorphed = np.zeros_like(secImg)
     for tissue_label in [2, 1]:
         blobs_labels = label(secImg == tissue_label, background=0, connectivity=2)
@@ -367,7 +371,7 @@ if __name__ == '__main__':
 # +~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~+
 # |   Segmentation - MR registration   |
 # +~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~+
-if __name__ == '__main__':
+if __name__ != '__main__':
     mrItk = sitk.GetImageFromArray(mrImgNorm)
     segItk = sitk.GetImageFromArray(secImg)
     fixed_image = sitk.Cast(mrItk, sitk.sitkFloat32)
@@ -509,6 +513,7 @@ if __name__ == '__main__':
     plt.ylabel("Registration metric")
     plt.xlabel("Iterations")
     plt.show()
+
 
 
 
