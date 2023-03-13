@@ -57,8 +57,9 @@ import matplotlib.pyplot as plt
 # |   mri    |
 # +~~~~~~~~~~+
 proteinDir = r'/media/banikr/banikr/SpinalCordInjury/MALDI/210603-Chen_protein_slide_F'
-saveSegPath = os.path.join(proteinDir, 'segmentation_vae_vae.h5')
-with h5py.File(saveSegPath, 'r') as pfile:  # saves the data
+dataFold = r'/media/banikr/banikr/SpinalCordInjury/Chase_high_res'
+readSegPath = os.path.join(proteinDir, 'segmentation_vae_vae.h5')
+with h5py.File(readSegPath, 'r') as pfile:  # saves the data
     segImg = np.array(pfile['seg'])
 
 maskImg = np.zeros_like(segImg)
@@ -67,8 +68,8 @@ maskImg[np.where(segImg != 0)] = 1
 labeled_array, nFeatures = ndimage.label(maskImg, structure=np.ones((3, 3)))
 print(nFeatures, "sections found...")
 
-nSliceMALDI = [2]       #  [1, 2, 3, 4]
-nSlice = 4      #  MRI
+nSliceMALDI = [1]       #  [1, 2, 3, 4]
+nSlice = 0      #  MRI
 for secID in nSliceMALDI:  # ,3,4]:
     minx, miny = np.inf, np.inf
     maxx, maxy = -np.inf, -np.inf
@@ -123,12 +124,13 @@ blobs_labels2 = label(secImg_, background=0, connectivity=1)
 regProps = regionprops(blobs_labels2)
 largestcomp = np.argmax([prop.area_filled for prop in regProps])
 for i, region in enumerate(regProps):
-    if i == largestcomp: pass # dont remove the largest conncomp
+    if i == largestcomp: pass   # dont remove the largest conncomp
     else:
         for coord in region.coords:
             secImg[coord[0], coord[1]] = 0
 
-secImg_filled = area_closing(secImg, area_threshold=64, connectivity=8)
+# change the area_threshold 32, 64, 96 to get
+secImg_filled = area_closing(secImg, area_threshold=96, connectivity=8)
 # displayImage(secImg_filled, Title_='largest_filled')
 newMat = secImg_filled - secImg
 secImg[np.where(newMat == 1)] = 3
@@ -136,7 +138,6 @@ secImg[np.where(newMat == 1)] = 3
 
 secImg = nnPixelCorrect(secImg, d=8, n_=3, plot_=False)
 displayImage(secImg, 'corrected_secImg')
-dataFold = r'/media/banikr/banikr/SpinalCordInjury/Chase_high_res'
 niiPath = os.path.join(dataFold, '9.nii')
 mrBlock = nib.load(niiPath).get_fdata()
 mrSlice = mrBlock[..., nSlice]
@@ -209,7 +210,7 @@ if __name__ == '__main__':
         fixed_image,
         moving_image,
         sitk.Euler2DTransform(),
-        sitk.CenteredTransformInitializerFilter.GEOMETRY))      # updated: from GEOMETRY
+        sitk.CenteredTransformInitializerFilter.MOMENTS))      # updated: from GEOMETRY
     registration_method = sitk.ImageRegistrationMethod()
     # registration_method.SetMetricAsMattesMutualInformation(numberOfHistogramBins=500)
     # registration_method.SetMetricSamplingStrategy(registration_method.NONE)
@@ -218,8 +219,8 @@ if __name__ == '__main__':
     #                                                              minStep=1e-3,
     #                                                              numberOfIterations=500,
     #                                                              gradientMagnitudeTolerance=1e-2)
-    registration_method.SetOptimizerAsConjugateGradientLineSearch(learningRate=2.0,
-                                                                  numberOfIterations=500,
+    registration_method.SetOptimizerAsConjugateGradientLineSearch(learningRate=1.0,
+                                                                  numberOfIterations=100,
                                                                   convergenceMinimumValue=1e-6,
                                                                   convergenceWindowSize=10)
     registration_method.SetInterpolator(sitk.sitkNearestNeighbor)
