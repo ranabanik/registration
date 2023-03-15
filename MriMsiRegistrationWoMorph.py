@@ -9,11 +9,13 @@ from skimage.measure import regionprops, label
 from skimage.morphology import area_closing
 from skimage import filters
 from skimage.exposure import rescale_intensity, adjust_gamma, equalize_hist, equalize_adapthist
-from utils import displayImage, displayMR, multi_dil, bbox2#, command_iteration#, command_iteration2
+from utils import displayImage, displayMR, multi_dil, bbox2 #, command_iteration#, command_iteration2
 from utils import smooth_and_resample, image_pair_generator, multiscale_demons_filter, multiscale_demons, nnPixelCorrect
 import nibabel as nib
 import SimpleITK as sitk
 import matplotlib.pyplot as plt
+import random
+random.seed(1001)
 # proteinDir = r'/media/banikr/banikr/SpinalCordInjury/MALDI/210603-Chen_protein_slide_F'
 # saveSegPath = os.path.join(proteinDir, 'segmentation_vae_vae.h5')
 # with h5py.File(saveSegPath, 'r') as pfile:  # saves the data
@@ -68,8 +70,8 @@ maskImg[np.where(segImg != 0)] = 1
 labeled_array, nFeatures = ndimage.label(maskImg, structure=np.ones((3, 3)))
 print(nFeatures, "sections found...")
 
-nSliceMALDI = [1]       #  [1, 2, 3, 4]
-nSlice = 0      #  MRI
+nSliceMALDI = [2]       #  [1, 2, 3, 4]
+nSlice = 4      #  MRI
 for secID in nSliceMALDI:  # ,3,4]:
     minx, miny = np.inf, np.inf
     maxx, maxy = -np.inf, -np.inf
@@ -199,6 +201,7 @@ def command_iteration(filter):
 fixed_image = sitk.Cast(sitk.GetImageFromArray(scSliceGammaEqCLAHEresized), sitk.sitkFloat32)
 # moving_image = sitk.Cast(sitk.GetImageFromArray(np.fliplr(np.rot90(secImg, axes=(1, 0)))), sitk.sitkFloat32)
 moving_image = sitk.Cast(sitk.GetImageFromArray(secImg), sitk.sitkFloat32)
+print("fixed moving size: ", fixed_image.GetSize(), moving_image.GetSize())
 displayImage(sitk.GetArrayFromImage(fixed_image), Title_='fixed image(normed)')
 displayImage(sitk.GetArrayFromImage(moving_image), Title_='moving image')
 if __name__ == '__main__':
@@ -344,7 +347,9 @@ if __name__ == '__main__':
         plt.xlabel("Iterations")
         plt.show()
 
-    # another way of demon...
+    # +~~~~~~~~~~~~~~~~~~~~~~~~~~+
+    # |   works almost perfect   |
+    # +~~~~~~~~~~~~~~~~~~~~~~~~~~+
     if __name__ == '__main__':
         metric_values = []
         registration_method = sitk.ImageRegistrationMethod()
@@ -405,7 +410,7 @@ if __name__ == '__main__':
         checkerImg = compare_images(sitk.GetArrayFromImage(out),
                                     sitk.GetArrayFromImage(fixed_image),
                                     method='diff')
-        displayImage(checkerImg, Title_='msi - mri')
+        displayImage(checkerImg, 'msi - mri')
         plt.plot(metric_values)
         plt.ylabel("Registration metric")
         plt.xlabel("Iterations")
@@ -530,11 +535,18 @@ if __name__ != '__main__':
     # # initial_displacement_field.SetReferenceImage(fixed_images[-1])
     # initial_displacement_field.CopyInformation(fixed_images[-1])
 
-
-
-
-
-
-
-
-
+# +--------------------------+
+# |    saving transforms     |
+# +--------------------------+
+if __name__ == '__main__':
+    # import pickle, copy
+    # .pickle , .bin none works
+    finalCompTx = sitk.CompositeTransform([eulerTx, affineTx, outTx])
+    finalCompTxFile = os.path.join(dataFold, '{}_mr{}_ms{}_finalCompTx.hdf'.format(os.path.basename(os.path.normpath(niiPath).split('.')[0]),
+                                                                           nSlice, nSliceMALDI[0]))
+    # outTxFile = os.path.join(dataFold, '{}_mr{}_ms{}_outTx.hdf'.format(os.path.basename(os.path.normpath(niiPath).split('.')[0]),
+    #                                                             nSlice, nSliceMALDI[0]))
+    sitk.WriteTransform(finalCompTx, finalCompTxFile)
+    # with open(finalCompTxFile, 'wb') as fp:
+    #     p = pickle.dump(copy.deepcopy(finalCompTx), fp)
+    # sitk.WriteTransform(outTx, outTxFile)
