@@ -757,7 +757,6 @@ if __name__ != '__main__':
     #                           smoothing_sigmas=smoothing_sigmas)
     # displayImage(sitk.GetArrayFromImage(out), Title_='smoothed image')
 
-
     def multiscale_demons(
             registration_algorithm,
             fixed_image,
@@ -787,26 +786,6 @@ if __name__ != '__main__':
         Returns:
             SimpleITK.DisplacementFieldTransform
         """
-
-        # Create image pyramid in a memory efficient manner using a generator function.
-        # The whole pyramid never exists in memory, each level is created when iterating over
-        # the generator.
-        def image_pair_generator(
-                fixed_image, moving_image, shrink_factors, smoothing_sigmas
-        ):
-            end_level = 0
-            start_level = 0
-            if shrink_factors is not None:
-                end_level = len(shrink_factors)
-            for level in range(start_level, end_level):
-                f_image = smooth_and_resample(
-                    fixed_image, shrink_factors[level], smoothing_sigmas[level]
-                )
-                m_image = smooth_and_resample(
-                    moving_image, shrink_factors[level], smoothing_sigmas[level]
-                )
-                yield (f_image, m_image)
-            yield (fixed_image, moving_image)
 
         # Create initial displacement field at lowest resolution.
         # Currently, the pixel type is required to be sitkVectorFloat64 because
@@ -1580,12 +1559,13 @@ if __name__ != '__main__':
     plt.show()
 
 # todo: `Euler + Affine + FSFDemon` works nicely but ...
+#       0. Preprocess the mr for registration with MALDI
 #       1. Run same method(finalized) for all sections
-#          1.1. Morphological output of VAE must be curated before registration
+#          1.1. Morphological output of VAE must be processed before registration
 #       2. Parameters could be optimized for better results
 #          2.1. How ?
 #       3. Plotting issues of affine metrics
-
+#          3.1. zivy ?
 
 if __name__ == '__main__':
     def command_iteration2(method):
