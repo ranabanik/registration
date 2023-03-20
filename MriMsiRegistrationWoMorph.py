@@ -70,55 +70,57 @@ maskImg[np.where(segImg != 0)] = 1
 labeled_array, nFeatures = ndimage.label(maskImg, structure=np.ones((3, 3)))
 print(nFeatures, "sections found...")
 
-nSliceMALDI = [2]       #  [1, 2, 3, 4]
-nSlice = 4      #  MRI
-for secID in nSliceMALDI:  # ,3,4]:
-    minx, miny = np.inf, np.inf
-    maxx, maxy = -np.inf, -np.inf
-    for x in range(labeled_array.shape[0]):
-        for y in range(labeled_array.shape[1]):
-            if labeled_array[x, y] == secID:
-                minx, miny = min(minx, x), min(miny, y)
-                maxx, maxy = max(maxx, x), max(maxy, y)
-    regionshape = [maxx - minx + 1,
-                   maxy - miny + 1]
-    secImg = segImg[minx:maxx, miny:maxy]
-    displayImage(secImg, Title_='VAE segmentation {}'.format(secID))
+sliceIdcsMALDI = [1, 2, 3, 4]       #  [1, 2, 3, 4]
+sliceIdcsMRI = [0, 1, 2, 3, 4]      #  MRI
+# for secID in nSliceMALDI:  # ,3,4]:
+nSliceMALDI = sliceIdcsMALDI[2]
+nSliceMRI = sliceIdcsMRI[2]
+minx, miny = np.inf, np.inf
+maxx, maxy = -np.inf, -np.inf
+for x in range(labeled_array.shape[0]):
+    for y in range(labeled_array.shape[1]):
+        if labeled_array[x, y] == nSliceMALDI:
+            minx, miny = min(minx, x), min(miny, y)
+            maxx, maxy = max(maxx, x), max(maxy, y)
+regionshape = [maxx - minx + 1,
+               maxy - miny + 1]
+secImg = segImg[minx:maxx, miny:maxy]
+displayImage(secImg, Title_='VAE segmentation {}'.format(nSliceMALDI))
 
-    if len(np.unique(secImg)) > 4:
-        secImg_ = np.zeros_like(secImg)
-        secImg_[np.where(secImg == 1)] = 2
-        secImg_[np.where(secImg == 2)] = 2
-        secImg_[np.where(secImg == 3)] = 1
-        secImg_[np.where(secImg == 4)] = 1
-        secImg_[np.where(secImg == 5)] = 0
-        secImg = secImg_
-    displayImage(secImg, Title_='3 label segmentation')
+if len(np.unique(secImg)) > 4:
+    secImg_ = np.zeros_like(secImg)
+    secImg_[np.where(secImg == 1)] = 2
+    secImg_[np.where(secImg == 2)] = 2
+    secImg_[np.where(secImg == 3)] = 1
+    secImg_[np.where(secImg == 4)] = 1
+    secImg_[np.where(secImg == 5)] = 0
+    secImg = secImg_
+displayImage(secImg, Title_='3 label segmentation')
 
-    secImgMorphed = np.zeros_like(secImg)
-    for tissue_label in [1, 2]:
-        blobs_labels = label(secImg == tissue_label, background=0, connectivity=1)
-        regionProperties = regionprops(label_image=blobs_labels)
-        if tissue_label == 2:
-            regionsBiggerToSmallerList = np.argsort([prop.area_filled for prop in regionProperties])[::-1][0:2]
-        if tissue_label == 1:
-            regionsBiggerToSmallerList = np.argsort([prop.area_filled for prop in regionProperties])[::-1][0:15]
+secImgMorphed = np.zeros_like(secImg)
+for tissue_label in [1, 2]:
+    blobs_labels = label(secImg == tissue_label, background=0, connectivity=1)
+    regionProperties = regionprops(label_image=blobs_labels)
+    if tissue_label == 2:
+        regionsBiggerToSmallerList = np.argsort([prop.area_filled for prop in regionProperties])[::-1][0:2]
+    if tissue_label == 1:
+        regionsBiggerToSmallerList = np.argsort([prop.area_filled for prop in regionProperties])[::-1][0:15]
 
-        morphedTissueImg = np.zeros_like(blobs_labels)
-        for region in regionsBiggerToSmallerList:
-            for coord in regionProperties[region].coords:
-                # print(coord)
-                morphedTissueImg[coord[0], coord[1]] = 1
-        square = np.array([[1, 1],
-                           [1, 1]])
-        morphedTissueImg = multi_dil(morphedTissueImg, 1, element=square)
-        morphedTissueImg = area_closing(morphedTissueImg, area_threshold=1000, connectivity=50)
-        secImgMorphed[np.where(morphedTissueImg)] = tissue_label
+    morphedTissueImg = np.zeros_like(blobs_labels)
+    for region in regionsBiggerToSmallerList:
+        for coord in regionProperties[region].coords:
+            # print(coord)
+            morphedTissueImg[coord[0], coord[1]] = 1
+    square = np.array([[1, 1],
+                       [1, 1]])
+    morphedTissueImg = multi_dil(morphedTissueImg, 1, element=square)
+    morphedTissueImg = area_closing(morphedTissueImg, area_threshold=1000, connectivity=50)
+    secImgMorphed[np.where(morphedTissueImg)] = tissue_label
 
-    for tissue_label in [1, 2]:
-        mask = (secImgMorphed == tissue_label)
-        secImg[mask] = tissue_label
-    # displayImage(secImg, Title_='moving image')
+for tissue_label in [1, 2]:
+    mask = (secImgMorphed == tissue_label)
+    secImg[mask] = tissue_label
+# displayImage(secImg, Title_='moving image')
 
 secImg_ = np.zeros_like(secImg)
 secImg_[np.where(secImg != 0)] = 1
@@ -132,7 +134,7 @@ for i, region in enumerate(regProps):
             secImg[coord[0], coord[1]] = 0
 
 # change the area_threshold 32, 64, 96 to get
-secImg_filled = area_closing(secImg, area_threshold=96, connectivity=8)
+secImg_filled = area_closing(secImg, area_threshold=32, connectivity=8)
 # displayImage(secImg_filled, Title_='largest_filled')
 newMat = secImg_filled - secImg
 secImg[np.where(newMat == 1)] = 3
@@ -142,10 +144,10 @@ secImg = nnPixelCorrect(secImg, d=8, n_=3, plot_=False)
 displayImage(secImg, 'corrected_secImg')
 niiPath = os.path.join(dataFold, '9.nii')
 mrBlock = nib.load(niiPath).get_fdata()
-mrSlice = mrBlock[..., nSlice]
+mrSlice = mrBlock[..., nSliceMRI]
 scMaskPath = os.path.join(dataFold, '9_SC_mask_wo_CSF.nii.gz')
 scMask = nib.load(scMaskPath).get_fdata()
-scMaskSlice = scMask[..., nSlice]
+scMaskSlice = scMask[..., nSliceMRI]
 
 rmin, rmax, cmin, cmax = bbox2(scMaskSlice)
 mrSlice[np.where(scMaskSlice == 0)] = 0
@@ -543,7 +545,7 @@ if __name__ == '__main__':
     # .pickle , .bin none works
     finalCompTx = sitk.CompositeTransform([eulerTx, affineTx, outTx])
     finalCompTxFile = os.path.join(dataFold, '{}_mr{}_ms{}_finalCompTx.hdf'.format(os.path.basename(os.path.normpath(niiPath).split('.')[0]),
-                                                                           nSlice, nSliceMALDI[0]))
+                                                                           nSliceMRI, nSliceMALDI))
     # outTxFile = os.path.join(dataFold, '{}_mr{}_ms{}_outTx.hdf'.format(os.path.basename(os.path.normpath(niiPath).split('.')[0]),
     #                                                             nSlice, nSliceMALDI[0]))
     sitk.WriteTransform(finalCompTx, finalCompTxFile)
