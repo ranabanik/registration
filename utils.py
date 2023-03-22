@@ -8,6 +8,11 @@ import SimpleITK as sitk
 import copy
 from numpy.lib.stride_tricks import as_strided
 
+def closest(lst, K):
+    closestVal = lst[min(range(len(lst)), key=lambda i: abs(lst[i] - K))]
+    closestValInd = np.squeeze(np.where(lst==closestVal))
+    return closestVal, closestValInd
+
 def nnPixelCorrect(arr, n_, d, bg_=0, plot_=True):
     """
     corrects the pixel value based on neighnoring pixels
@@ -201,12 +206,19 @@ def multiscale_demons(registration_algorithm,
                                                                        fixed_images[-1].GetDirection())
     else:
         print("depth: ", fixed_images[-1].GetDepth())
-        initial_displacement_field = sitk.Image(fixed_images[-1].GetWidth(),
-                                                fixed_images[-1].GetHeight(),
-                                                fixed_images[-1].GetDepth(),
-                                                sitk.sitkVectorFloat64)
-        # print(">>", fixed_images[-1])
-        initial_displacement_field.CopyInformation(fixed_images[-1])
+        initial_displacement_field = sitk.Image(fixed_images[-1].GetSize(),
+                                                sitk.sitkVectorFloat64,
+                                                fixed_images[-1].GetDimension()
+                                                )
+        initial_displacement_field.SetSpacing(fixed_images[-1].GetSpacing())
+        initial_displacement_field.SetOrigin(fixed_images[-1].GetOrigin())
+        # initial_displacement_field = sitk.Image(fixed_images[-1].GetSize(),
+        #                                         fixed_images[-1].GetWidth(),
+        #                                         fixed_images[-1].GetHeight(),
+        #                                         fixed_images[-1].GetDepth(),
+        #                                         sitk.sitkVectorFloat64)
+        # # print(">>", fixed_images[-1])
+        # initial_displacement_field.CopyInformation(fixed_images[-1])
 
     # print("This happens ...")
     # Run the registration.
@@ -214,14 +226,17 @@ def multiscale_demons(registration_algorithm,
                                                                 moving_images[-1],
                                                                 initial_displacement_field)
     # Start at the top of the pyramid and work our way down.
-    for f_image, m_image in reversed(list(zip(fixed_images[0:-1], moving_images[0:-1]))):
+    for f_image, m_image in reversed(list(zip(fixed_images, moving_images))):
         initial_displacement_field = sitk.Resample(initial_displacement_field, f_image)
         initial_displacement_field = registration_algorithm.Execute(f_image, m_image, initial_displacement_field)
     return sitk.DisplacementFieldTransform(initial_displacement_field)
 
 def multiscale_demons_filter(registration_algorithm,
-                      fixed_image, moving_image, #initial_transform=None,
-                      shrink_factors=None, smoothing_sigmas=None):
+                             fixed_image, moving_image,
+                             # initial_transform=None,
+                             shrink_factors=None,
+                             smoothing_sigmas=None
+                             ):
     """
     :param registration_algorithm: any registration algorithm with an `Execute`
     :param fixed_image:
@@ -238,16 +253,51 @@ def multiscale_demons_filter(registration_algorithm,
         for shrink_factor, smoothing_sigma in reversed(list(zip(shrink_factors, smoothing_sigmas))):
             fixed_images.append(smooth_and_resample(fixed_images[0], shrink_factor, smoothing_sigma))
             moving_images.append(smooth_and_resample(moving_images[0], shrink_factor, smoothing_sigma))
+    # if shrink_factors is not None:
+    #     original_size = fixed_image.GetSize()
+    #     original_spacing = fixed_image.GetSpacing()
+    #     s_factors = (
+    #         [shrink_factors[0]] * len(original_size)
+    #         if np.isscalar(shrink_factors[0])
+    #         else shrink_factors[0]
+    #     )
+    #     df_size = [
+    #         int(sz / float(sf) + 0.5) for sf, sz in zip(s_factors, original_size)
+    #     ]
+    #     df_spacing = [
+    #         ((original_sz - 1) * original_spc) / (new_sz - 1)
+    #         for original_sz, original_spc, new_sz in zip(
+    #             original_size, original_spacing, df_size
+    #         )
+    #     ]
+    # else:
+    #     df_size = fixed_image.GetSize()
+    #     df_spacing = fixed_image.GetSpacing()
 
-    transform_to_displacment_field_filter = sitk.TransformToDisplacementFieldFilter()
-    transform_to_displacment_field_filter.SetReferenceImage(fixed_images[-1])
-    displacementTx = sitk.DisplacementFieldTransform(transform_to_displacment_field_filter.Execute
-                                                     (sitk.Transform(fixed_image.GetDimension(),
+    # if initial_transform:
+    #     transform_to_displacement_field_filter = sitk.TransformToDisplacementFieldFilter(
+    #         initial_transform,
+    #         sitk.sitkVectorFloat64,
+    #         df_size,
+    #         fixed_image.GetOrigin(),
+    #         df_spacing,
+    #         fixed_image.GetDirection(),
+    #     )
+    # else:
+    #     transform_to_displacement_field_filter = sitk.TransformToDisplacementFieldFilter(
+    #         df_size, sitk.sitkVectorFloat64, fixed_image.GetDimension()
+    #     )
+    #     transform_to_displacement_field_filter.SetSpacing(df_spacing)
+    #     transform_to_displacement_field_filter.SetOrigin(fixed_image.GetOrigin())
+    transform_to_displacement_field_filter = sitk.TransformToDisplacementFieldFilter()
+    transform_to_displacement_field_filter.SetReferenceImage(fixed_images[-1]) # smallest blurrest image
+    initial_transform = sitk.DisplacementFieldTransform(transform_to_displacement_field_filter.Execute
+                                                     (sitk.Transform(fixed_images[-1].GetDimension(),
                                                                      sitk.sitkIdentity)))
     # Regularization (update field - viscous, total field - elastic).
-    displacementTx.SetSmoothingGaussianOnUpdate(varianceForUpdateField=0.0, varianceForTotalField=2.5)
+    initial_transform.SetSmoothingGaussianOnUpdate(varianceForUpdateField=0.5, varianceForTotalField=12.5)
 
-    initial_displacement_field = transform_to_displacment_field_filter.Execute(displacementTx)
+    initial_displacement_field = transform_to_displacement_field_filter.Execute(initial_transform)
     # Start at the top of the pyramid and work our way down.
     level = 0
     for f_image, m_image in reversed(list(zip(fixed_images, moving_images))):

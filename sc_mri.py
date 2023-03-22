@@ -10,11 +10,15 @@ import matplotlib as mtl
 # mtl.use('TKAgg')
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
+from skimage import filters
+from skimage.color import label2rgb
 from skimage.util import compare_images
 from skimage.transform import resize
 from skimage.measure import regionprops, label
 from skimage.morphology import area_closing, dilation
+from skimage.exposure import adjust_gamma, rescale_intensity, equalize_hist, equalize_adapthist
 import h5py
 from sklearn.mixture import GaussianMixture as GMM
 from scipy import ndimage
@@ -22,21 +26,17 @@ from kneed import KneeLocator
 import SimpleITK as sitk
 import cv2
 
-def displayMR(MR, Title_= 'Demo'):
-    plt.imshow(MR, origin='lower', cmap='gray')
-    plt.title(Title_)
-    plt.colorbar()
-    plt.show()
-
-def displayImage(matrix, Title_='demo'):
-    if 'msml_list' not in plt.colormaps():
-        colors = [(0.1, 0.1, 0.1), (0.9, 0, 0), (0, 0.9, 0), (0, 0, 0.9)]  # Bk -> R -> G -> Bl
-        color_bin = 100
-        mtl.colormaps.register(LinearSegmentedColormap.from_list(name='msml_list', colors=colors, N=color_bin))
-    plt.imshow(matrix, origin='lower', cmap='msml_list')
-    plt.title(Title_)
-    plt.colorbar()
-    plt.show()
+def normalize(image, min_new, max_new):
+    '''
+    Normalizes values to the interval [min_new, max_new]
+    Parameters:
+        min_new: min value from new base.
+        max_new: max value from new base.
+        val: float or array-like value to be normalized.
+    '''
+    ratio = (image - np.min(image)) / (np.max(image) - np.min(image))
+    normalized = (max_new - min_new) * ratio + min_new
+    return normalized.astype(np.uint8)
 
 def command_iteration(filter):
     global metric_values
@@ -174,12 +174,12 @@ if __name__ == '__main__':
     # dataFold = r'E:\SpinalCordInjury\from_Chase\MaldiRatNii\MaldiRat\Week 2\gems_MT_anat_axial_09.img'
     # dataFold = r'/media/banikr/banikr/SpinalCordInjury/from_Chase/MaldiRatNii/MaldiRat/Week 2/gems_MT_anat_axial_09.img'
     dataFold = r'/media/banikr/banikr/SpinalCordInjury/Chase_high_res'
-    print(os.path.basename(dataFold))
-    dataFiles = glob(os.path.join(dataFold, '*.nii'))
+    # print(os.path.basename(dataFold))
+    # dataFiles = glob(os.path.join(dataFold, '*.nii'))
     # print(dataFiles)
     # niiPath = os.path.join(dataFold, 'gems_MT_anat_axial_09.img.nii.gz')
     niiPath = os.path.join(dataFold, '9.nii')
-    mr_block = nib.load(niiPath).get_fdata()
+    mrBlock = nib.load(niiPath).get_fdata()
     # print(mr_block.shape)
     # mr_cropped = mr_block[55:72, 55:80, mr_slice]
     # rotated_mr_cropped = ndimage.rotate(mr_cropped, 180)
@@ -208,25 +208,25 @@ if __name__ == '__main__':
     # plt.colorbar()
     # plt.show()
     # cropMaskPath = os.path.join(dataFold, 'SC_mask_for_crop.nii.gz')
-    cropMaskPath = os.path.join(dataFold, '9_SC_mask.nii.gz')
-    crop_block = nib.load(cropMaskPath).get_fdata()
+    scMaskPath = os.path.join(dataFold, '9_SC_mask.nii.gz')
+    scMask = nib.load(scMaskPath).get_fdata()
 
-    mrImg = mr_block[..., mr_slice]
-    mrMask = crop_block[..., mr_slice]
-    mrImg[np.where(mrMask == 0)] = 0
-    displayMR(mrImg)
+    # mrImg = mr_block[..., mr_slice]
+    # mrMask = scMask[..., mr_slice]
+    # mrImg[np.where(mrMask == 0)] = 0
+    # displayMR(mrImg)
     def bbox2(img):
         rows = np.any(img, axis=1)
         cols = np.any(img, axis=0)
         rmin, rmax = np.where(rows)[0][[0, -1]]
         cmin, cmax = np.where(cols)[0][[0, -1]]
         return rmin, rmax, cmin, cmax
-    # print(bbox2(crop_block))
-    rmin, rmax, cmin, cmax = bbox2(mrImg)
-    # mr_block[np.where(crop_block == 0)] = 0
-    # mr_cropped = mrImg[rmin-1:rmax+2, cmin-1:cmax+2]#, :]
-    mr_cropped = mrImg[rmin:rmax + 1, cmin:cmax + 1]
-    print(mr_cropped.shape)
+    # # print(bbox2(crop_block))
+    # rmin, rmax, cmin, cmax = bbox2(mrImg)
+    # # mr_block[np.where(crop_block == 0)] = 0
+    # # mr_cropped = mrImg[rmin-1:rmax+2, cmin-1:cmax+2]#, :]
+    # mr_cropped = mrImg[rmin:rmax + 1, cmin:cmax + 1]
+    # print(mr_cropped.shape)
     # resize mri just for visualization...
     # mr_resized = resize(mr_cropped,
     #                     secImg.T.shape,
@@ -241,8 +241,8 @@ if __name__ == '__main__':
     # print("Finally we have a MSI segmentation and a MRI slice scan...")
     # mrImg = mr_cropped[..., mr_slice]
     # mrImgNorm = mr_cropped / np.max(mr_cropped)
-    mrImgNorm = mr_cropped/ np.max(mr_cropped)
-    displayMR(mrImgNorm, Title_="resized - normalized")
+    # mrImgNorm = mr_cropped/ np.max(mr_cropped)
+    # displayMR(mrImgNorm, Title_="resized - normalized")
     # from scipy.ndimage.filters import maximum_filter, minimum_filter, gaussian_filter
     # blurred_image = maximum_filter(mrImgNorm, size=2)
     # # displayMR(blurred_image, Title_='maximum')
@@ -253,52 +253,178 @@ if __name__ == '__main__':
     # mrImgNorm = gaussian_filter(mrImgNorm, sigma=radius)
     # displayMR(mrImgNorm, Title_='Gaussian')
 
-    # todo
-    # +~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~+
-    # |   enhance the MR image: what can be done?
-    # |   1. Get better data from Chase
-    # |      |_ if not
-    # |   2. Median or filter to denoise
-    # |   3. CLAHE or mCLAHE for contrast enhancement
-    # |   4. ITK-snap or photoshop
-    # +~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~+
-    # hist, bins = np.histogram(mr_cropped.flatten(), np.max(mr_cropped))
-    # cdf = hist.cumsum()
-    # cdf_normalized = cdf * float(hist.max()) / cdf.max()
-    # plt.plot(cdf_normalized, color='b')
-    # plt.hist(mr_cropped.flatten(), 256, [0, 256], color='r')
-    # # plt.xlim([0, 256])
-    # plt.legend(('cdf', 'histogram'), loc='upper left')
-    # plt.show()
-    # min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(mr_cropped)
-    # new_img = np.zeros(mr_cropped.shape, dtype=np.uint8)
-    # new_img = cv2.normalize(mr_cropped, new_img, 0, 1, cv2.NORM_MINMAX)
-    # displayMR(mr_cropped, Title_='old')
-    # displayMR(new_img, Title_='new')
+    # todo +~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~+
+    #      |   enhance the MR image: what can be done?        |
+    #      |   1. Get better data from Chase                  |
+    #      |      |_ if not                                   |
+    #      |   2. Median or filter to denoise                 |
+    #      |   3. CLAHE or mCLAHE for contrast enhancement    |
+    #      |   4. ITK-snap or photoshop                       |
+    #      +~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~+
+# +------------------+
+# |  CLAHE not good?  |
+# +------------------+
+if __name__ != '__main__':
+    fig, axes = plt.subplots(mr_block.shape[2], 3, figsize=(15, 10), dpi=100, sharex=False)
+    # axes = axs.ravel()
+    # fig, ax = plt.figure()  # start plotting
+    # fig.subplots_adjust(hspace=0, wspace=0.08, right=0.95)
+    for slice in range(mr_block.shape[2]):
+        # print(slice)
+        # print(mr_cropped.shape)
+        mrImg = mr_block[..., slice]
+        mrMask = crop_block[..., slice]
+        mrImg[np.where(mrMask == 0)] = 0
+        rmin, rmax, cmin, cmax = bbox2(mrImg)
+        mr_cropped = mrImg[rmin:rmax + 1, cmin:cmax + 1]
+        normalized_mr_cropped = normalize(mr_cropped, 0, 255)
+        mr = axes[slice, 0].imshow(normalized_mr_cropped, cmap='gray')
+        divider = make_axes_locatable(axes[slice, 0])
+        max = divider.append_axes('right', size='5%', pad=0.05)
+        fig.colorbar(mr, cax=max, ax=axes[slice, 0])
+        classes_ = 6
+        thresholds = filters.threshold_multiotsu(normalized_mr_cropped, classes=classes_)
+        regions = np.digitize(normalized_mr_cropped, bins=thresholds)
+        regions_labeled = label2rgb(regions)
+        # print(np.unique(regions))
+        # axes[slice].set_title(tl, fontsize=20)
+        im = axes[slice, 1].imshow(regions_labeled)
+        divider = make_axes_locatable(axes[slice, 1])
+        cax = divider.append_axes('right', size='5%', pad=0.05)
+        fig.colorbar(im, cax=cax, ax=axes[slice, 1])
+        axes[slice, 2].hist(normalized_mr_cropped)
+        axes[slice, 2].vlines(thresholds, linewidth=1.5, ymin=0, ymax=25)
+        # print("here")
+        # break
+        print(">> ", slice)
+        # break
+    fig.suptitle("Multi-otsu segmentation with class {}".format(classes_), fontsize=20, fontweight='bold')
+    plt.show()
 
-    # from skimage import exposure
-    # data_rescaled = exposure.rescale_intensity(mr_cropped, out_range=(0, 1))
-    # data_eq = exposure.equalize_hist(data_rescaled)
-    # fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(8, 4))
-    #
-    # axes[0].imshow(data_rescaled, cmap='gray')
-    # axes[0].set_title('Rescaled')
-    # axes[1].imshow(data_eq, cmap='gray')
-    # axes[1].set_title('Histogram Equalized')
-    # plt.show()
+# +--------------------------+
+# |   with whole block       |
+# +--------------------------+
+print(">>", bbox2(scMask))
+rmin, rmax, cmin, cmax = bbox2(scMask)
+mrBlock[np.where(scMask == 0)] = 0
+scBlock = mrBlock[rmin:rmax + 1, cmin:cmax + 1, :]
+# +--------------------------------+
+# |  working on individual slices
+# |  this cell is just for visualization
+# |  but the method seems to work
+# +--------------------------------+
+if __name__ != '__main__':
+    perc_ = (5, 99.5)
+    vmin, vmax = np.percentile(scBlock, q=perc_)
+    clipped_data = rescale_intensity(
+        scBlock,
+        in_range=(vmin, vmax),
+        out_range=(0, 255)  # np.float32
+    )
+    classes_ = 4
+    gamma_val = 1.9
+    fig, axes = plt.subplots(scBlock.shape[2], 8, figsize=(25, 10), dpi=300, sharex=False)
+    for slice in range(scBlock.shape[2]):
+        im = axes[slice, 0].imshow(scBlock[..., slice], cmap='gray')
+        divider = make_axes_locatable(axes[slice, 0])
+        max = divider.append_axes('right', size='5%', pad=0.05)
+        fig.colorbar(im, cax=max, ax=axes[slice, 0])
+        if slice == 0: axes[slice, 0].set_title("original", fontsize=15, fontweight='bold')
 
-    # array = mr_cropped # sitk.GetArrayFromImage(mr_cropped)
+        im = axes[slice, 2].imshow(clipped_data[:, :, slice], cmap='gray')
+        divider = make_axes_locatable(axes[slice, 2])
+        cax = divider.append_axes('right', size='5%', pad=0.05)
+        fig.colorbar(im, cax=cax, ax=axes[slice, 2])
+        if slice == 0: axes[slice, 2].set_title("clipped", fontsize=15, fontweight='bold')
+
+        gamma_slice = adjust_gamma(clipped_data[:, :, slice], gamma=gamma_val)
+        im = axes[slice, 4].imshow(gamma_slice, cmap='gray')
+        divider = make_axes_locatable(axes[slice, 4])
+        cax = divider.append_axes('right', size='5%', pad=0.15)
+        fig.colorbar(im, cax=cax, ax=axes[slice, 4])
+        if slice == 0: axes[slice, 4].set_title("gamma-adjusted", fontsize=15, fontweight='bold')
+
+        eq_img = equalize_hist(gamma_slice) #clipped_data[:, :, slice])
+        clahe_img = equalize_adapthist(eq_img, kernel_size=8)
+        im = axes[slice, 6].imshow(clahe_img, cmap='gray')
+        divider = make_axes_locatable(axes[slice, 6])
+        cax = divider.append_axes('right', size='5%', pad=0.05)
+        fig.colorbar(im, cax=cax, ax=axes[slice, 6])
+        if slice == 0: axes[slice, 6].set_title("clahe", fontsize=15, fontweight='bold')
+
+        thresholds = filters.threshold_multiotsu(scBlock[:, :, slice], classes=classes_)
+        regions = np.digitize(scBlock[:, :, slice], bins=thresholds)
+        regions_labeled = label2rgb(regions)
+        im = axes[slice, 1].imshow(regions_labeled)
+        divider = make_axes_locatable(axes[slice, 1])
+        cax = divider.append_axes('right', size='5%', pad=0.05)
+        fig.colorbar(im, cax=cax, ax=axes[slice, 1])
+
+        thresholds = filters.threshold_multiotsu(clipped_data[:, :, slice], classes=classes_)
+        regions = np.digitize(clipped_data[:, :, slice], bins=thresholds)
+        regions_labeled = label2rgb(regions)
+        im = axes[slice, 3].imshow(regions_labeled)
+        divider = make_axes_locatable(axes[slice, 3])
+        cax = divider.append_axes('right', size='5%', pad=0.05)
+        fig.colorbar(im, cax=cax, ax=axes[slice, 3])
+
+        thresholds = filters.threshold_multiotsu(gamma_slice, classes=classes_)
+        regions = np.digitize(gamma_slice, bins=thresholds)
+        regions_labeled = label2rgb(regions)
+        im = axes[slice, 5].imshow(regions_labeled)
+        divider = make_axes_locatable(axes[slice, 5])
+        cax = divider.append_axes('right', size='5%', pad=0.05)
+        fig.colorbar(im, cax=cax, ax=axes[slice, 5])
+
+        thresholds = filters.threshold_multiotsu(clahe_img, classes=classes_)
+        regions = np.digitize(clahe_img, bins=thresholds)
+        regions_labeled = label2rgb(regions)
+        im = axes[slice, 7].imshow(regions_labeled)
+        divider = make_axes_locatable(axes[slice, 7])
+        cax = divider.append_axes('right', size='5%', pad=0.05)
+        fig.colorbar(im, cax=cax, ax=axes[slice, 7])
+    # bin_centers_, img_cdf_ = cumulative_distribution(scBlock[..., 4])
+    # plt.plot(img_cdf_, bin_centers_)
+    # plt.show()
     #
-    # # Normalize the array
-    # array = (array - np.min(array)) / (np.max(array) - np.min(array))
-    #
-    # # Perform histogram equalization
-    # array_eq = sitk.GetArrayFromImage(sitk.EqualizeHistogram(sitk.GetImageFromArray(array)))
-    # # Convert back to an image
-    # # image_eq = sitk.GetImageFromArray(array_eq)
-    # # image_eq.CopyInformation(image)
-    # displayMR(array, Title_='old')
-    # displayMR(array_eq, Title_='new')
+    # bin_centers_, img_cdf_ = cumulative_distribution(clahe_img)
+    # plt.plot(img_cdf_, bin_centers_)
+    # plt.show()
+    # fig.tight_layout(pad=1.0)
+    plt.subplots_adjust(left=0.1,
+                        bottom=0.1,
+                        right=0.9,
+                        top=0.9,
+                        wspace=0.4,
+                        hspace=0.4)
+    fig.suptitle("{}% clipping, gamma:{}, classes:{}".format(perc_, gamma_val, classes_), fontsize=20,
+                 fontweight='bold')
+    plt.show()
+
+
+# +~~~~~~~~~~~~~~~~~~~~~~~~~+
+# |     prepare the MRI     |
+# +~~~~~~~~~~~~~~~~~~~~~~~~~+
+if __name__ == '__main__':
+    perc_ = (5, 99.5)
+    vmin, vmax = np.percentile(scBlock, q=perc_)
+    scClipped = rescale_intensity(
+        scBlock,
+        in_range=(vmin, vmax),
+        out_range=(0, 255)
+    )
+    classes_ = 4
+    gamma_val = 1.9
+    nSlice = 4
+    scSliceGamma = adjust_gamma(scClipped[:, :, nSlice], gamma=gamma_val)
+    scSliceGammaEq = equalize_hist(scSliceGamma)
+    scSliceGammaEqCLAHE = equalize_adapthist(scSliceGammaEq, kernel_size=8)
+
+    thresholds = filters.threshold_multiotsu(scSliceGammaEqCLAHE, classes=classes_)
+    regions = np.digitize(scSliceGammaEqCLAHE, bins=thresholds)
+    print("regions \n", np.unique(regions))
+    displayImage(regions, Title_='regions')
+    displayMR(scSliceGammaEqCLAHE, Title_='CLAHE')
 
 # +~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~+
 # |    morphological operations     |

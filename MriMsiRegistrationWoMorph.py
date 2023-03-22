@@ -75,6 +75,7 @@ sliceIdcsMRI = [0, 1, 2, 3, 4]      #  MRI
 # for secID in nSliceMALDI:  # ,3,4]:
 nSliceMALDI = sliceIdcsMALDI[2]
 nSliceMRI = sliceIdcsMRI[2]
+print("MRI slice: {}\nMSI slice: {}".format(nSliceMRI, nSliceMALDI))
 minx, miny = np.inf, np.inf
 maxx, maxy = -np.inf, -np.inf
 for x in range(labeled_array.shape[0]):
@@ -317,7 +318,7 @@ if __name__ == '__main__':
 
         if __name__ != '__main__':
             shrinkFactors = [4, 2, 1]
-            smoothingSigmas = [2, 1, 0]
+            smoothingSigmas = [4, 2, 0.0001]
             registration_method.setInitialTransform(displacementTx)
             registration_method.SetMetricAsDemons(0.5)
             registration_method.SetShrinkFactorsPerLevel(shrinkFactors=shrinkFactors)
@@ -349,10 +350,71 @@ if __name__ == '__main__':
         plt.xlabel("Iterations")
         plt.show()
 
+    if __name__ != '__main__':
+        metric_values = []
+        registration_method = sitk.ImageRegistrationMethod()
+        demonsFilter = sitk.FastSymmetricForcesDemonsRegistrationFilter()
+        demonsFilter.SetNumberOfIterations(1000)
+        demonsFilter.SetStandardDeviations(1.2)
+        transform_to_displacment_field_filter = sitk.TransformToDisplacementFieldFilter()
+        transform_to_displacment_field_filter.SetReferenceImage(fixed_image)
+        initialTransform = sitk.DisplacementFieldTransform(transform_to_displacment_field_filter.Execute(
+                                                           sitk.Transform(fixed_image.GetDimension(),
+                                                           sitk.sitkIdentity)
+                                                           ))
+        initialTransform.SetSmoothingGaussianOnUpdate(varianceForUpdateField=0.0, varianceForTotalField=1.5)
+        registration_method.SetMovingInitialTransform(compositeTx)
+        registration_method.SetInitialTransform(initialTransform, inPlace=True)
+        if __name__ != '__main__':
+            registration_method.SetShrinkFactorsPerLevel(shrinkFactors=[4, 2, 1])
+            registration_method.SetSmoothingSigmasPerLevel(smoothingSigmas=[8, 4, 0.0001])
+
+            registration_method.SetInterpolator(sitk.sitkNearestNeighbor)
+            # If you have time, run this code as is, otherwise switch to the gradient descent optimizer
+            # registration_method.SetOptimizerAsConjugateGradientLineSearch(learningRate=1.0, numberOfIterations=20, convergenceMinimumValue=1e-6, convergenceWindowSize=10)
+            # registration_method.SetOptimizerAsGradientDescent(learningRate=1.0, numberOfIterations=20,
+            #                                                   convergenceMinimumValue=1e-6, convergenceWindowSize=10)
+
+            registration_method.SetMetricAsANTSNeighborhoodCorrelation(4)  # updated from 4
+            # registration_method.SetMetricAsDemons(7)
+            registration_method.MetricUseFixedImageGradientFilterOff()  # not sure what it does but saw it in example
+            registration_method.SetOptimizerScalesFromPhysicalShift()
+            # registration_method.SetOptimizerScalesFromIndexShift()
+            registration_method.SetOptimizerAsGradientDescent(
+                learningRate=1.05,
+                numberOfIterations=250,
+                convergenceMinimumValue=1e-6, convergenceWindowSize=250,
+                estimateLearningRate=registration_method.EachIteration,
+            )
+
+            # registration_method.SetOptimizerAsConjugateGradientLineSearch(learningRate=0.75,
+            #                                                               numberOfIterations=150,
+            #                                                               convergenceMinimumValue=1e-6,
+            #                                                               convergenceWindowSize=100,
+            #                                                               estimateLearningRate=registration_method.EachIteration)
+            registration_method.AddCommand(sitk.sitkIterationEvent, lambda: command_iteration2(registration_method))
+            outTx = registration_method.Execute(fixed_image, moving_image)
+            resampler = sitk.ResampleImageFilter()
+            resampler.SetReferenceImage(fixed_image)
+            resampler.SetInterpolator(sitk.sitkNearestNeighbor)
+            resampler.SetDefaultPixelValue(0)
+            resampler.SetTransform(outTx)
+            out = resampler.Execute(out)
+            displayImage(sitk.GetArrayFromImage(out), Title_='Euler + Affine + FSFDemonsRegistrationFilter')
+            # displayImage(sitk.GetArrayFromImage(moving_image), Title_='moving image')
+            # displayImage(sitk.GetArrayFromImage(fixed_image), Title_='fixed image')
+            checkerImg = compare_images(sitk.GetArrayFromImage(out),
+                                        sitk.GetArrayFromImage(fixed_image),
+                                        method='diff')
+            displayImage(checkerImg, 'msi - mri')
+            plt.plot(metric_values)
+            plt.ylabel("Registration metric")
+            plt.xlabel("Iterations")
+            plt.show()
     # +~~~~~~~~~~~~~~~~~~~~~~~~~~+
     # |   works almost perfect   |
     # +~~~~~~~~~~~~~~~~~~~~~~~~~~+
-    if __name__ == '__main__':
+    if __name__ != '__main__':
         metric_values = []
         registration_method = sitk.ImageRegistrationMethod()
 
@@ -540,7 +602,7 @@ if __name__ != '__main__':
 # +--------------------------+
 # |    saving transforms     |
 # +--------------------------+
-if __name__ == '__main__':
+if __name__ != '__main__':
     # import pickle, copy
     # .pickle , .bin none works
     finalCompTx = sitk.CompositeTransform([eulerTx, affineTx, outTx])

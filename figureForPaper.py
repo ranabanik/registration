@@ -17,7 +17,7 @@ from skimage.exposure import adjust_gamma, rescale_intensity, equalize_hist, equ
 from skimage import filters
 from skimage.color import label2rgb
 from utils import bbox2
-
+# todo: remove the white spaces in the saved figure.
 figureDir = r'/media/banikr/banikr/SpinalCordInjury/MALDI/Figures_for_publication'
 proteinDir = r'/media/banikr/banikr/SpinalCordInjury/MALDI/210603-Chen_protein_slide_F'
 readSegPath = os.path.join(proteinDir, 'segmentation_vae_vae.h5')
@@ -94,23 +94,26 @@ if __name__ != '__main__':
         ax = axes.ravel()
         cmap_ = 'msml_list'
         ax[0].imshow(img1, cmap=cmap_)
-        ax[0].set_title("original", pad=0.01)
+        # ax[0].set_title("original", pad=0.01)
         ax[0].axis('off')
         pcm = ax[0].pcolormesh(img1, cmap=cmap_)
-        fig.colorbar(pcm, ax=ax[0], shrink=0.5, pad=-0.2)  # , location={1.0, 0, 0, 0})
+        fig.colorbar(pcm, ax=ax[0], shrink=0.4, pad=-0.2)  # , location={1.0, 0, 0, 0})
         ax[1].imshow(rec1, cmap=cmap_)
-        ax[1].set_title("reconstructed")
+        # ax[1].set_title("reconstructed")
         ax[1].axis('off')
         pcm = ax[1].pcolormesh(rec1, cmap=cmap_)
-        fig.colorbar(pcm, ax=ax[1], shrink=0.5, pad=-0.2)
+        fig.colorbar(pcm, ax=ax[1], shrink=0.4, pad=-0.2)
         # fig.colorbar()
         # fig.suptitle("Protein ion image at m/z: {:.4f}".format(peakmzs[m]))
-        fig.subplots_adjust(top=0.92, bottom=0.0, left=0.02,
-                            right=0.95, hspace=0.01, wspace=0.12)
-        # fig.tight_layout() #rect=[0, 0.03, 1, 0.95])
-        # fig.tight_layout()#pad=0.2)
+        fig.subplots_adjust(top=1.00,
+                            bottom=0.0,
+                            left=-0.08,
+                            right=0.95,
+                            hspace=0.0,
+                            wspace=0.12)
         # plt.savefig(os.path.join(figureDir, 'ion_image_comparison_{}.png'.format(peakmzs[m])))
         plt.show()
+        # break
 if __name__ != '__main__':
     with h5py.File(proteinPath, 'r') as pfile:
         print(pfile.keys())
@@ -173,15 +176,16 @@ if __name__ != '__main__':
     # plt.savefig(os.path.join(r'/media/banikr/banikr/SpinalCordInjury/MALDI/Figures_for_publication',
     #                          'bicscorekneeplot.png'))
     plt.show()
-if __name__ == '__main__':
-    nSlice = 4
-    nSliceMALDI = [2]
+# ion image overlap on MR
+if __name__ != '__main__':
+    nSliceMR = 2
+    nSliceMALDI = 3
     pickMzList = [14115, 14197, 8566, 4961, 7063]
-    pickMz = pickMzList[4]
+    pickMz = pickMzList[0]
     mrBlock = nib.load(niiPath).get_fdata()
-    mrSlice = mrBlock[..., nSlice]
+    mrSlice = mrBlock[..., nSliceMR]
     scMask = nib.load(scMaskPath).get_fdata()
-    scMaskSlice = scMask[..., nSlice]
+    scMaskSlice = scMask[..., nSliceMR]
     rmin, rmax, cmin, cmax = bbox2(scMaskSlice)
     mrSlice_x3 = resize(mrSlice,
                         tuple(3 * x for x in mrSlice.shape),
@@ -194,10 +198,9 @@ if __name__ == '__main__':
     ionImageMRsize = np.zeros(tuple(3 * x for x in mrSlice.shape))
     ionImageOnMRPath = os.path.join(dataFold, '{}_mr{}_ms{}_ionImage_mz_{}_onMR.npy'.format(
         os.path.basename(os.path.normpath(niiPath).split('.')[0]),
-        nSlice, nSliceMALDI[0], pickMz))
+        nSliceMR, nSliceMALDI, pickMz))
     ionImageOnMR = np.load(ionImageOnMRPath)
     ionImageMRsize[3 * rmin: 3 * (rmax + 1), 3 * cmin: 3 * (cmax + 1)] = ionImageOnMR
-
 
     if 'msml2' not in plt.colormaps():
         colors = [
@@ -237,9 +240,10 @@ if __name__ == '__main__':
     ax.axis('off')
     # ax.set_title('Ion image on MR, m/z: {:.4f}'.format(clVal))
     # plt.legend()
-    plt.savefig(os.path.join(figureDir, '{}_mr{}_ms{}_ionImage_mz_{}_onMR.png'.format(os.path.basename(os.path.normpath(niiPath).split('.')[0]),
-                                                            nSlice, nSliceMALDI[0], pickMz)))
+    # plt.savefig(os.path.join(figureDir, '{}_mr{}_ms{}_ionImage_mz_{}_onMR.png'.format(os.path.basename(os.path.normpath(niiPath).split('.')[0]),
+    #                                                         nSliceMR, nSliceMALDI[0], pickMz)))
     plt.show()
+# mri contrast enhancement and segmentation
 if __name__ != '__main__':
     mrBlock = nib.load(niiPath).get_fdata()
     scMaskPath = os.path.join(dataFold, '9_SC_mask.nii.gz')
